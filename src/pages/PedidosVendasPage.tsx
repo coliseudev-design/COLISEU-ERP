@@ -132,6 +132,7 @@ export const PedidosVendasPage: React.FC = () => {
           });
 
           const unificada = Array.from(map.values());
+          localStorage.setItem('coliseu_pedidos_venda_list', JSON.stringify(unificada));
           setPedidos(unificada);
         }
       } catch (err) {
