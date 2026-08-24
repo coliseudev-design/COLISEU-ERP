@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, HelpCircle, Search, Sun, Moon } from 'lucide-react';
+import { Bell, HelpCircle, Search, Sun, Moon, LogOut } from 'lucide-react';
 import { useTheme } from '../../lib/theme';
 import { syncEngine } from '../../lib/syncEngine';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface AppHeaderProps {
   onOpenCommandBar?: () => void;
@@ -43,6 +44,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   activeModuleTitle,
   activeTab = 'dashboard',
 }) => {
+  const { funcionario, logout } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
   const { theme, toggleTheme } = useTheme();
@@ -360,14 +362,10 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
         {/* Perfil do Usuário */}
         <div
-          tabIndex={0}
-          role="button"
-          aria-label="Perfil do usuário"
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: 'var(--spacing-2)',
-            cursor: 'pointer',
             borderRadius: 'var(--radius-sm)',
             padding: '2px 4px',
           }}
@@ -383,11 +381,11 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               alignItems: 'center',
               justifyContent: 'center',
               color: 'var(--text-primary)',
-              fontSize: 'var(--font-size-2xs)',
-              fontWeight: 'var(--font-weight-semibold)',
+              fontSize: '11px',
+              fontWeight: 700,
             }}
           >
-            AD
+            {(funcionario?.username || 'AD').substring(0, 2).toUpperCase()}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <span
@@ -398,13 +396,38 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 lineHeight: 1.1,
               }}
             >
-              SILENUS
+              {funcionario?.apelido || funcionario?.nome || 'Admin Master'}
             </span>
             <span style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-muted)' }}>
-              Matriz / Suporte
+              {funcionario?.grupo_acesso_nome || 'Administrador'}
             </span>
           </div>
         </div>
+
+        {/* Botão Sair / Deslogar */}
+        <button
+          type="button"
+          onClick={logout}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            backgroundColor: 'rgba(239, 68, 68, 0.08)',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
+            color: '#ef4444',
+            cursor: 'pointer',
+            padding: '4px 8px',
+            borderRadius: 'var(--radius-xs)',
+            fontSize: '11px',
+            fontWeight: 600,
+            transition: 'all 0.15s ease',
+            marginLeft: '4px',
+          }}
+          title="Sair do Sistema e Encerrar Sessão"
+        >
+          <LogOut size={13} />
+          <span>Sair</span>
+        </button>
       </div>
     </header>
   );

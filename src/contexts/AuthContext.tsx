@@ -18,10 +18,10 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Inicialização síncrona do localStorage para NUNCA perder login com F5
+  // Inicialização a partir do sessionStorage (persiste F5, mas exige login ao reabrir o navegador)
   const getSavedSession = () => {
     try {
-      const raw = localStorage.getItem('coliseu_session');
+      const raw = sessionStorage.getItem('coliseu_session');
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
@@ -49,14 +49,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setFilialAtiva(result.funcionario.filial_padrao_id || null);
       setIsAuthenticated(true);
       
-      // Salva sessão completa no localStorage para persistir F5 e recarregamento de página
-      localStorage.setItem('coliseu_session', JSON.stringify({
+      // Salva sessão no sessionStorage para persistir F5 na mesma aba
+      sessionStorage.setItem('coliseu_session', JSON.stringify({
         funcionario: result.funcionario,
         permissoes: result.permissoes,
         filiais_permitidas: result.filiais_permitidas,
         filialAtiva: result.funcionario.filial_padrao_id || null,
         timestamp: Date.now()
       }));
+      // Limpa qualquer resíduo antigo do localStorage
+      localStorage.removeItem('coliseu_session');
     } catch (err: any) {
       const msg = typeof err === 'string' ? err : err?.message || 'Erro ao autenticar';
       setLoginError(msg);
@@ -72,6 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setPermissoes([]);
     setFiliaisPermitidas([]);
     setFilialAtiva(null);
+    sessionStorage.removeItem('coliseu_session');
     localStorage.removeItem('coliseu_session');
   }, []);
 
