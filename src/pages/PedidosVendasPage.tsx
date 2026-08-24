@@ -75,56 +75,63 @@ export const PedidosVendasPage: React.FC = () => {
           localList.forEach(p => map.set(p.id, p));
 
           cloudList.forEach((cp: any) => {
-            if (!map.has(cp.id)) {
-              map.set(cp.id, {
-                id: cp.id,
-                numeroPedido: String(cp.numero_pedido || '0'),
-                tipoMovimento: 'SAIDA',
-                status: cp.status || 'APROVADO',
-                dataEmissao: cp.data_emissao ? new Date(cp.data_emissao).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
-                filialDepto: cp.filial_id || 'MATRIZ',
-                clienteId: cp.cliente_id || '',
-                clienteCodigo: '1',
-                clienteNome: cp.cliente_nome,
-                clienteCnpjCpf: cp.cliente_cpf_cnpj || '',
-                clienteCidade: cp.cliente_cidade || 'DOURADOS',
-                clienteUf: cp.cliente_uf || 'MS',
-                clienteEndereco: cp.cliente_endereco || 'CENTRO',
-                clienteBairro: cp.cliente_bairro || 'CENTRO',
-                clienteTelefone: '',
-                naturezaOperacao: {
-                  cfop: '5102',
-                  descricao: cp.natureza_operacao || '5102 - VENDA DE MERCADORIAS',
-                  tipo: 'SAIDA',
-                  geraFinanceiro: true,
-                  movimentaEstoque: true,
-                  destinacaoPadrao: 'ESTADUAL',
-                },
-                vendedorId: 'VEND-1',
-                vendedorNome: cp.vendedor_nome || 'VENDEDOR',
-                tabelaPrecos: 'TABELA PADRÃO',
-                tipoFrete: 'SEM_FRETE',
-                valorFrete: 0,
-                pesoLiquidoKg: 0,
-                pesoBrutoKg: 0,
-                quantidadeVolumes: 0,
-                itens: [],
-                totalProdutos: parseFloat(cp.valor_total || '0'),
-                totalDescontoGlobal: 0,
-                totalAcrescimos: 0,
-                totalIpi: 0,
-                totalIcms: 0,
-                totalIcmsSt: 0,
-                totalServicos: 0,
-                valorTotalFinal: parseFloat(cp.valor_total || '0'),
-                formaPagamentoNome: 'A VISTA / A PRAZO',
-                parcelas: [],
-              });
-            }
+            const rawNum = cp.numero_pedido || cp.numeroPedido || '0';
+            const rawCliente = cp.cliente_nome || cp.clienteNome || 'CLIENTE NÃO INFORMADO';
+            const rawTotal = parseFloat(cp.valor_total || cp.valorTotalFinal || '0');
+            const rawData = cp.data_emissao || cp.dataEmissao || new Date().toLocaleDateString('pt-BR');
+            const dataFmt = typeof rawData === 'string' && rawData.includes('-') ? new Date(rawData).toLocaleDateString('pt-BR') : String(rawData);
+
+            const itemFormatado: PedidoVendaItem = {
+              id: cp.id,
+              numeroPedido: String(rawNum),
+              tipoMovimento: cp.tipoMovimento || 'SAIDA',
+              status: cp.status || 'APROVADO',
+              dataEmissao: dataFmt,
+              filialDepto: cp.filial_id || cp.filialDepto || 'MATRIZ - DOURADOS/MS',
+              clienteId: cp.cliente_id || cp.clienteId || '',
+              clienteCodigo: cp.clienteCodigo || '1',
+              clienteNome: rawCliente,
+              clienteCnpjCpf: cp.cliente_cpf_cnpj || cp.clienteCnpjCpf || '',
+              clienteCidade: cp.cliente_cidade || cp.clienteCidade || 'DOURADOS',
+              clienteUf: cp.cliente_uf || cp.clienteUf || 'MS',
+              clienteEndereco: cp.cliente_endereco || cp.clienteEndereco || 'CENTRO',
+              clienteBairro: cp.cliente_bairro || cp.clienteBairro || 'CENTRO',
+              clienteTelefone: cp.clienteTelefone || '',
+              naturezaOperacao: typeof cp.naturezaOperacao === 'object' && cp.naturezaOperacao !== null
+                ? cp.naturezaOperacao
+                : {
+                    cfop: '5102',
+                    descricao: cp.natureza_operacao || '5102 - VENDA DE MERCADORIAS',
+                    tipo: 'SAIDA',
+                    geraFinanceiro: true,
+                    movimentaEstoque: true,
+                    destinacaoPadrao: 'ESTADUAL',
+                  },
+              vendedorId: cp.vendedorId || 'VEND-1',
+              vendedorNome: cp.vendedor_nome || cp.vendedorNome || 'CARLOS SILVA (INTERNO)',
+              tabelaPrecos: cp.tabelaPrecos || 'TABELA PADRÃO',
+              tipoFrete: cp.tipoFrete || 'CIF',
+              valorFrete: cp.valorFrete || 0,
+              pesoLiquidoKg: cp.pesoLiquidoKg || 0,
+              pesoBrutoKg: cp.pesoBrutoKg || 0,
+              quantidadeVolumes: cp.quantidadeVolumes || 1,
+              itens: Array.isArray(cp.itens) ? cp.itens : [],
+              totalProdutos: rawTotal,
+              totalDescontoGlobal: 0,
+              totalAcrescimos: 0,
+              totalIpi: 0,
+              totalIcms: 0,
+              totalIcmsSt: 0,
+              totalServicos: 0,
+              valorTotalFinal: rawTotal,
+              formaPagamentoNome: cp.formaPagamentoNome || 'A VISTA / A PRAZO',
+              parcelas: Array.isArray(cp.parcelas) ? cp.parcelas : [],
+            };
+
+            map.set(cp.id, itemFormatado);
           });
 
           const unificada = Array.from(map.values());
-          localStorage.setItem('coliseu_pedidos_vendas_data', JSON.stringify(unificada));
           setPedidos(unificada);
         }
       } catch (err) {
