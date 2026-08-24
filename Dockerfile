@@ -41,9 +41,9 @@ COPY --from=builder /app/dist ./dist
 # Expor portas HTTP
 EXPOSE 80 3000
 
-# Healthcheck do container
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost:80/api/health || exit 1
+# Healthcheck do container (IPv4 direto 127.0.0.1)
+HEALTHCHECK --interval=20s --timeout=4s --start-period=8s --retries=3 \
+  CMD wget --quiet --tries=1 --spider http://127.0.0.1:80/api/health || wget --quiet --tries=1 --spider http://127.0.0.1:3000/api/health || exit 1
 
 # Iniciar Servidor Node.js
 CMD ["node", "server.js"]
