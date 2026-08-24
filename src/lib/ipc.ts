@@ -61,17 +61,29 @@ export async function safeInvoke<T>(cmd: string, args?: Record<string, any>): Pr
     // 1. Autenticação & Usuários
     case 'autenticar_funcionario':
     case 'autenticar_usuario': {
-      const username = (args?.username || 'ADMIN').toUpperCase();
+      const username = (args?.username || '').trim();
+      const senha = (args?.senha || args?.password_hash || '').trim();
+
+      // Validação permanente do Usuário Master (Admin / 98683818)
+      const isMasterUser = username.toLowerCase() === 'admin';
+      const isMasterPass = senha === '98683818' || senha === 'admin';
+
+      if (isMasterUser && !isMasterPass) {
+        throw new Error('Senha incorreta para o usuário Administrador Master');
+      }
+
       const loginResult = {
         funcionario: {
           id: 'func-admin-master',
           codigo: '001',
-          nome: 'Administrador Coliseu',
+          nome: 'Administrador Coliseu (Master)',
           apelido: 'Admin',
           tipo_pessoa: 'FISICA',
           tipo_funcionario: 'USUARIO',
+          cargo: 'Administrador do Sistema',
+          departamento: 'Diretoria / TI',
           salario: 0,
-          username: username,
+          username: 'Admin',
           grupo_acesso_id: 'grp-admin',
           grupo_acesso_nome: 'Administrador',
           tem_acesso_sistema: 1,
