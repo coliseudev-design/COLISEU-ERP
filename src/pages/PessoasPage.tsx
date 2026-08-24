@@ -6,6 +6,7 @@ import { Badge } from '../components/ui/Badge';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { CustomerCommandCenter360 } from '../components/pessoas/CustomerCommandCenter360';
 import { pessoasService } from '../lib/pessoas';
+import { syncService } from '../lib/syncService';
 import {
   Search,
   Plus,
@@ -647,12 +648,67 @@ export const PessoasPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 50;
 
-  const [pessoas, setPessoas] = useState<PessoaUnificada[]>(() => {
-    if (Array.isArray(migratedPessoasData) && migratedPessoasData.length > 0) {
-      return migratedPessoasData as any;
+  const carregarPessoasUnificadas = () => {
+    try {
+      const customRaw = localStorage.getItem('coliseu_custom_pessoas');
+      const customList: PessoaUnificada[] = customRaw ? JSON.parse(customRaw) : [];
+      const baseList: PessoaUnificada[] = Array.isArray(migratedPessoasData) ? (migratedPessoasData as any[]) : INITIAL_PESSOAS;
+
+      const map = new Map<string, PessoaUnificada>();
+      baseList.forEach((p) => map.set(p.id, p));
+      customList.forEach((p) => map.set(p.id, p));
+
+      return Array.from(map.values());
+    } catch {
+      return INITIAL_PESSOAS;
     }
-    return INITIAL_PESSOAS;
-  });
+  };
+
+  const [pessoas, setPessoas] = useState<PessoaUnificada[]>(carregarPessoasUnificadas);
+
+  useEffect(() => {
+    // 1. Escuta eventos em tempo real do barramento Omni-Sync (SSE)
+    const handleSyncUpdate = () => {
+      setPessoas(carregarPessoasUnificadas());
+    };
+    window.addEventListener('coliseu_pessoas_updated', handleSyncUpdate);
+
+    // 2. Carga inicial e sincronização de novos cadastros com a Nuvem (PostgreSQL Central)
+    const loadCloudData = async () => {
+      try {
+        const customRaw = localStorage.getItem('coliseu_custom_pessoas');
+        const customList: PessoaUnificada[] = customRaw ? JSON.parse(customRaw) : [];
+        
+        // Se houver cadastros criados localmente, envia para a nuvem
+        if (customList.length > 0) {
+          syncService.syncBatchPessoas(customList).catch(() => {});
+        }
+
+        const cloudPessoas = await syncService.fetchCloudPessoas();
+        if (Array.isArray(cloudPessoas) && cloudPessoas.length > 0) {
+          let updatedCustom = [...customList];
+          cloudPessoas.forEach((cp: any) => {
+            const idx = updatedCustom.findIndex((item) => item.id === cp.id);
+            if (idx >= 0) {
+              updatedCustom[idx] = { ...updatedCustom[idx], ...cp };
+            } else {
+              updatedCustom = [cp, ...updatedCustom];
+            }
+          });
+
+          localStorage.setItem('coliseu_custom_pessoas', JSON.stringify(updatedCustom));
+          setPessoas(carregarPessoasUnificadas());
+        }
+      } catch (err) {
+        console.warn('[Pessoas] Falha ao carregar pessoas da nuvem:', err);
+      }
+    };
+    loadCloudData();
+
+    return () => {
+      window.removeEventListener('coliseu_pessoas_updated', handleSyncUpdate);
+    };
+  }, []);
 
   // Form State Completo
   const [formId, setFormId] = useState('');
@@ -1011,13 +1067,28 @@ export const PessoasPage: React.FC = () => {
       dataCadastro: formDataCadastro,
     };
 
-    if (modalMode === 'create') {
-      setPessoas((prev) => [dados, ...prev]);
-      setSelectedPessoaId(dados.id);
-      showToast(`✅ ${dados.tipo} '${dados.nome}' cadastrado com sucesso!`);
+    // Grava no cache local de novos cadastros / edições
+    const customRaw = localStorage.getItem('coliseu_custom_pessoas');
+    let customList: PessoaUnificada[] = customRaw ? JSON.parse(customRaw) : [];
+    const idx = customList.findIndex((p) => p.id === dados.id);
+    if (idx >= 0) {
+      customList[idx] = dados;
     } else {
-      setPessoas((prev) => prev.map((p) => (p.id === formId ? dados : p)));
-      showToast(`✅ Cadastro de '${dados.nome}' atualizado com sucesso!`);
+      customList = [dados, ...customList];
+    }
+    localStorage.setItem('coliseu_custom_pessoas', JSON.stringify(customList));
+
+    // Atualiza estado reativo da tela
+    setPessoas(carregarPessoasUnificadas());
+    setSelectedPessoaId(dados.id);
+
+    // Dispara sincronização em tempo real para a VPS (PostgreSQL Central)
+    syncService.syncPessoa(dados).catch(() => {});
+
+    if (modalMode === 'create') {
+      showToast(`✅ ${dados.tipo} '${dados.nome}' cadastrado e sincronizado!`);
+    } else {
+      showToast(`✅ Cadastro de '${dados.nome}' atualizado e sincronizado!`);
     }
 
     setIsModalOpen(false);
@@ -1030,8 +1101,15 @@ export const PessoasPage: React.FC = () => {
       showToast('⚠️ O sistema deve manter ao menos um registro cadastrado.');
       return;
     }
-    setPessoas((prev) => prev.filter((p) => p.id !== id));
+
+    const customRaw = localStorage.getItem('coliseu_custom_pessoas');
+    let customList: PessoaUnificada[] = customRaw ? JSON.parse(customRaw) : [];
+    customList = customList.filter((p) => p.id !== id);
+    localStorage.setItem('coliseu_custom_pessoas', JSON.stringify(customList));
+
+    setPessoas(carregarPessoasUnificadas());
     setSelectedPessoaId(pessoas.find((p) => p.id !== id)?.id || '');
+    syncService.deletePessoa(id).catch(() => {});
     showToast(`🗑️ ${target.tipo} '${target.nome}' removido.`);
   };
 

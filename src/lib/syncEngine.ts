@@ -181,12 +181,63 @@ class SyncEngine {
         window.dispatchEvent(new CustomEvent('coliseu_pedidos_vendas_updated', { detail: event }));
         break;
       }
-      case 'produtos':
-        window.dispatchEvent(new CustomEvent('coliseu_produtos_updated', { detail: event }));
-        break;
-      case 'pessoas':
+      case 'pessoas': {
+        try {
+          const raw = localStorage.getItem('coliseu_custom_pessoas');
+          let list: any[] = raw ? JSON.parse(raw) : [];
+          if (!Array.isArray(list)) list = [];
+
+          if (event.action === 'UPSERT' && event.payload) {
+            const p = event.payload;
+            const idx = list.findIndex((item) => item.id === p.id);
+            if (idx >= 0) {
+              list[idx] = { ...list[idx], ...p };
+            } else {
+              list = [p, ...list];
+            }
+            localStorage.setItem('coliseu_custom_pessoas', JSON.stringify(list));
+          } else if (event.action === 'DELETE' && event.id) {
+            list = list.filter((item) => item.id !== event.id);
+            localStorage.setItem('coliseu_custom_pessoas', JSON.stringify(list));
+          }
+        } catch (e) {
+          console.warn('[SyncEngine] Erro ao atualizar cache local de pessoas:', e);
+        }
         window.dispatchEvent(new CustomEvent('coliseu_pessoas_updated', { detail: event }));
         break;
+      }
+      case 'produtos': {
+        try {
+          const raw = localStorage.getItem('coliseu_custom_produtos');
+          let list: any[] = raw ? JSON.parse(raw) : [];
+          if (!Array.isArray(list)) list = [];
+
+          if (event.action === 'UPSERT' && event.payload) {
+            const p = event.payload;
+            const idx = list.findIndex((item) => item.id === p.id || item.sku === p.sku || item.codigo === p.codigo);
+            if (idx >= 0) {
+              list[idx] = { ...list[idx], ...p };
+            } else {
+              list = [p, ...list];
+            }
+            localStorage.setItem('coliseu_custom_produtos', JSON.stringify(list));
+          } else if (event.action === 'STOCK_DELTA' && event.payload) {
+            const { id, delta_quantidade } = event.payload;
+            const idx = list.findIndex((item) => item.id === id || item.sku === id || item.codigo === id);
+            if (idx >= 0) {
+              list[idx].estoqueAtual = (list[idx].estoqueAtual || 0) + (parseFloat(delta_quantidade) || 0);
+              localStorage.setItem('coliseu_custom_produtos', JSON.stringify(list));
+            }
+          } else if (event.action === 'DELETE' && event.id) {
+            list = list.filter((item) => item.id !== event.id);
+            localStorage.setItem('coliseu_custom_produtos', JSON.stringify(list));
+          }
+        } catch (e) {
+          console.warn('[SyncEngine] Erro ao atualizar cache local de produtos:', e);
+        }
+        window.dispatchEvent(new CustomEvent('coliseu_produtos_updated', { detail: event }));
+        break;
+      }
       case 'financeiro':
         window.dispatchEvent(new CustomEvent('coliseu_financeiro_updated', { detail: event }));
         break;

@@ -13,6 +13,7 @@ import { getEnderecos, EnderecoItem } from '../lib/enderecos';
 import { ModalCadastroRapidoMarca } from '../components/produtos/ModalCadastroRapidoMarca';
 import { ModalCadastroRapidoCategoria } from '../components/produtos/ModalCadastroRapidoCategoria';
 import { ModalCadastroRapidoEndereco } from '../components/produtos/ModalCadastroRapidoEndereco';
+import { syncService } from '../lib/syncService';
 import { MapPin } from 'lucide-react';
 
 export interface ProdutoItem {
@@ -174,6 +175,33 @@ export const ProductsPage: React.FC = () => {
     window.addEventListener('storage', handleUpdate);
     window.addEventListener('focus', handleUpdate);
     window.addEventListener('coliseu_produtos_updated', handleUpdate);
+
+    // Carga inicial da Nuvem (PostgreSQL Central)
+    const loadCloudProducts = async () => {
+      try {
+        const cloudProds = await syncService.fetchCloudProdutos();
+        if (Array.isArray(cloudProds) && cloudProds.length > 0) {
+          const custom = localStorage.getItem('coliseu_custom_produtos');
+          let customProds: any[] = custom ? JSON.parse(custom) : [];
+
+          cloudProds.forEach((cp: any) => {
+            const idx = customProds.findIndex((p: any) => p.id === cp.id || p.sku === cp.sku || p.codigo === cp.codigo);
+            if (idx >= 0) {
+              customProds[idx] = { ...customProds[idx], ...cp };
+            } else {
+              customProds = [cp, ...customProds];
+            }
+          });
+
+          localStorage.setItem('coliseu_custom_produtos', JSON.stringify(customProds));
+          setProdutos(carregarCatalogo());
+        }
+      } catch (err) {
+        console.warn('[Produtos] Falha ao carregar produtos da nuvem:', err);
+      }
+    };
+    loadCloudProducts();
+
     return () => {
       window.removeEventListener('storage', handleUpdate);
       window.removeEventListener('focus', handleUpdate);
@@ -217,13 +245,16 @@ export const ProductsPage: React.FC = () => {
       console.error(err);
     }
 
+    // Sincroniza em tempo real com a VPS (PostgreSQL Central)
+    syncService.syncProduto(newProd).catch(() => {});
+
     setProdutos((prev) => [newProd, ...prev]);
     setIsModalOpen(false);
     setNome('');
     setSku('');
     setEan('');
     setNcm('');
-    showToast(`✅ Produto '${nome}' cadastrado com sucesso!`);
+    showToast(`✅ Produto '${nome}' cadastrado e sincronizado com sucesso!`);
   };
 
   const filteredProdutos = useMemo(() => {
