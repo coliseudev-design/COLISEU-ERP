@@ -56,6 +56,8 @@ app.get('/api/health', async (req, res) => {
     in_memory_pedidos: inMemoryPedidos.length,
     timestamp: new Date().toISOString(),
   });
+});
+
 // Reset / Limpar todos os pedidos da nuvem
 app.all('/api/pedidos/reset', async (req, res) => {
   try {
