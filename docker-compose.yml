@@ -1,0 +1,62 @@
+﻿version: '3.8'
+
+services:
+  # --------------------------------------------------------------------------
+  # 1. Banco de Dados PostgreSQL 16 (Concentrador Central em Nuvem)
+  # --------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: erp-postgres-concentrador
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-coliseu_erp}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres123}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init-schema.sql:/docker-entrypoint-initdb.d/01-init-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-coliseu_erp}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - erp-network
+
+  # --------------------------------------------------------------------------
+  # 2. Aplicação Web ERP (React + Vite + Nginx Produção)
+  # --------------------------------------------------------------------------
+  erp-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: erp-web-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${PORT:-80}:80"
+    environment:
+      - NODE_ENV=production
+      - VITE_DB_HOST=postgres
+      - VITE_DB_PORT=5432
+      - VITE_DB_NAME=${POSTGRES_DB:-coliseu_erp}
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - erp-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  erp-network:
+    driver: bridge

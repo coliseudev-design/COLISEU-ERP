@@ -1,0 +1,43 @@
+[package]
+name = "erp_local_first"
+version = "0.1.0"
+description = "ERP Hibrido Local-First com Tauri v2 e SQLCipher"
+authors = ["Antigravity ERP Team"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2.0.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0.0", features = [] }
+tauri-plugin-shell = "2.0.0"
+tauri-plugin-single-instance = "2.0.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+argon2 = "0.5"
+rusqlite = { version = "0.31", features = ["bundled"] }
+uuid = { version = "1.8", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+tokio = { version = "1.37", features = ["full"] }
+keyring = "2.3"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+parking_lot = "0.12"
+dirs = "5.0"
+rand = "0.8"
+hex = "0.4"
+sha1 = "0.10"
+sha2 = "0.10"
+base64 = "0.22"
+rsa = { version = "0.9", features = ["sha1"] }
+quick-xml = "0.31"
+reqwest = { version = "0.12", features = ["json", "native-tls"] }
+printpdf = { version = "0.7", features = ["embedded_images"] }
+qrcode = "0.14"
+image = { version = "0.25", default-features = false, features = ["png"] }
+rfd = "0.15"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

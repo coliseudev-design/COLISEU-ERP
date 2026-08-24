@@ -1,0 +1,204 @@
+/* ================================================================
+   COLISEU ERP — Global Styles & Reset
+   ================================================================ */
+
+/* Import Design System Tokens + Component Classes */
+@import './assets/coliseu-design-system.css';
+
+/* Google Fonts — Inter (body) + JetBrains Mono (tabular/code) */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+/* ================================================================
+   CSS Reset (Enterprise-grade)
+   ================================================================ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* Root Layout */
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--surface-app);
+  color: var(--text-primary);
+  font-family: var(--font-family-body);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ================================================================
+   Focus Visible — Consistent Keyboard Focus Ring
+   ================================================================ */
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Remove focus-visible from elements that handle their own */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+/* ================================================================
+   Native Element Resets
+   ================================================================ */
+a {
+  color: var(--text-link);
+  text-decoration: none;
+  transition: color var(--motion-fast) var(--motion-ease);
+}
+
+a:hover {
+  color: var(--text-link-hover);
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+input, select, textarea {
+  font-family: inherit;
+}
+
+/* ================================================================
+   Padronização Corporativa: Todos os inputs de texto e cadastros em MAIÚSCULO
+   ================================================================ */
+input[type="text"]:not([data-case="preserve"]),
+input:not([type]):not([data-case="preserve"]),
+input[type="search"]:not([data-case="preserve"]),
+textarea:not([data-case="preserve"]),
+.coliseu-input:not([type="email"]):not([type="password"]):not([type="url"]):not([type="number"]):not([type="date"]):not([data-case="preserve"]) {
+  text-transform: uppercase;
+}
+
+/* Campos com preservação de case (email, senha, urls, chaves) */
+input[type="email"],
+input[type="password"],
+input[type="url"],
+input[data-case="preserve"],
+textarea[data-case="preserve"] {
+  text-transform: none;
+}
+
+table {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+img, svg {
+  display: block;
+  max-width: 100%;
+}
+
+/* ================================================================
+   Typography — Tabular Nums for Financial Data
+   ================================================================ */
+.tabular-nums {
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* ================================================================
+   Accessibility — Screen Reader Only
+   ================================================================ */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* ================================================================
+   Text Utilities
+   ================================================================ */
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-mono {
+  font-family: var(--font-family-mono);
+}
+
+.text-uppercase {
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wider);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* ================================================================
+   Custom Scrollbar (Enterprise Dark)
+   ================================================================ */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface-1);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--surface-3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--action-primary);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-3) var(--surface-1);
+}
+
+/* ================================================================
+   Selection Color
+   ================================================================ */
+::selection {
+  background-color: rgba(37, 99, 235, 0.3);
+  color: var(--text-primary);
+}
+
+/* ================================================================
+   Print Styles (hide chrome, show content)
+   ================================================================ */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}

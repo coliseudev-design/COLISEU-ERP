@@ -1,0 +1,99 @@
+# ==============================================================================
+# PowerSync Sync Rules Specification - ERP Híbrido Local-First
+# Rule 03 Compliant: Multi-Tenant Shield with Strict empresa_id & filial_id Scoping
+# ==============================================================================
+
+bucket_definitions:
+  # ----------------------------------------------------------------------------
+  # 1. BUCKET: master_cadastros
+  # Cadastros Mestres da Empresa (Empresas, Filiais, Produtos, Depósitos, Pessoas)
+  # Escopo: Restrito estritamente ao empresa_id extraído do token JWT autenticado
+  # ----------------------------------------------------------------------------
+  master_cadastros:
+    parameters:
+      - SELECT request.jwt_claim('empresa_id') AS empresa_id
+    data:
+      - SELECT * FROM empresas WHERE id = bucket.empresa_id
+      - SELECT * FROM filiais WHERE empresa_id = bucket.empresa_id AND is_deleted = 0
+      - SELECT * FROM produtos WHERE empresa_id = bucket.empresa_id AND is_deleted = 0
+      - SELECT * FROM depositos WHERE filial_id IN (
+          SELECT id FROM filiais WHERE empresa_id = bucket.empresa_id
+        ) AND is_deleted = 0
+      - SELECT * FROM pessoas WHERE empresa_id = bucket.empresa_id AND is_deleted = 0
+
+  # ----------------------------------------------------------------------------
+  # 2. BUCKET: estoque_saldos_bucket
+  # Saldos de Estoque e Movimentações Recentes da Empresa
+  # Escopo: Filtrado por depósitos vinculados às filiais da empresa do tenant
+  # ----------------------------------------------------------------------------
+  estoque_saldos_bucket:
+    parameters:
+      - SELECT request.jwt_claim('empresa_id') AS empresa_id
+    data:
+      - SELECT * FROM estoque_saldos WHERE deposito_id IN (
+          SELECT d.id FROM depositos d
+          JOIN filiais f ON d.filial_id = f.id
+          WHERE f.empresa_id = bucket.empresa_id
+        ) AND is_deleted = 0
+      - SELECT * FROM estoque_movimentacoes WHERE deposito_id IN (
+          SELECT d.id FROM depositos d
+          JOIN filiais f ON d.filial_id = f.id
+          WHERE f.empresa_id = bucket.empresa_id
+        ) AND created_at >= (NOW() - INTERVAL '30 days') AND is_deleted = 0
+
+  # ----------------------------------------------------------------------------
+  # 3. BUCKET: documentos_30_dias
+  # Documentos Fiscais, Transações de Venda, Caixa e Lançamentos dos últimos 30 dias
+  # Escopo: Restrito à filial_id e empresa_id do dispositivo com filtro temporal de 30 dias
+  # ----------------------------------------------------------------------------
+  documentos_30_dias:
+    parameters:
+      - SELECT request.jwt_claim('empresa_id') AS empresa_id, request.jwt_claim('filial_id') AS filial_id
+    data:
+      - SELECT * FROM vendas WHERE filial_id = bucket.filial_id AND created_at >= (NOW() - INTERVAL '30 days') AND is_deleted = 0
+      - SELECT * FROM vendas_itens WHERE venda_id IN (
+          SELECT id FROM vendas WHERE filial_id = bucket.filial_id AND created_at >= (NOW() - INTERVAL '30 days')
+        ) AND is_deleted = 0
+      - SELECT * FROM vendas_pagamentos WHERE venda_id IN (
+          SELECT id FROM vendas WHERE filial_id = bucket.filial_id AND created_at >= (NOW() - INTERVAL '30 days')
+        ) AND is_deleted = 0
+      - SELECT * FROM documentos_fiscais WHERE filial_id = bucket.filial_id AND created_at >= (NOW() - INTERVAL '30 days') AND is_deleted = 0
+      - SELECT * FROM documentos_fiscais_eventos WHERE documento_fiscal_id IN (
+          SELECT id FROM documentos_fiscais WHERE filial_id = bucket.filial_id AND created_at >= (NOW() - INTERVAL '30 days')
+        ) AND is_deleted = 0
+      - SELECT * FROM financeiro_lancamentos WHERE filial_id = bucket.filial_id AND created_at >= (NOW() - INTERVAL '30 days') AND is_deleted = 0
+      - SELECT * FROM caixa_movimentacoes WHERE filial_id = bucket.filial_id AND created_at >= (NOW() - INTERVAL '30 days') AND is_deleted = 0
+
+  # ----------------------------------------------------------------------------
+  # 4. BUCKET: dispositivos_bucket
+  # Registro e Gestão de Dispositivos Autorizados da Filial
+  # Escopo: Restrito à filial_id do tenant
+  # ----------------------------------------------------------------------------
+  dispositivos_bucket:
+    parameters:
+      - SELECT request.jwt_claim('filial_id') AS filial_id
+    data:
+      - SELECT * FROM dispositivos WHERE filial_id = bucket.filial_id AND is_deleted = 0
+
+  # ----------------------------------------------------------------------------
+  # 5. BUCKET: transporte_bucket
+  # Gestão de Frota, Motoristas, CT-e, CIOT e Operações de Transporte
+  # Escopo: Restrito ao empresa_id e filial_id do tenant
+  # ----------------------------------------------------------------------------
+  transporte_bucket:
+    parameters:
+      - SELECT request.jwt_claim('empresa_id') AS empresa_id
+    data:
+      - SELECT * FROM veiculos WHERE empresa_id = bucket.empresa_id AND is_deleted = 0
+      - SELECT * FROM motoristas WHERE empresa_id = bucket.empresa_id AND is_deleted = 0
+      - SELECT * FROM seguradoras WHERE empresa_id = bucket.empresa_id AND is_deleted = 0
+      - SELECT * FROM apolices_seguro WHERE empresa_id = bucket.empresa_id AND is_deleted = 0
+      - SELECT * FROM tabelas_frete WHERE empresa_id = bucket.empresa_id AND is_deleted = 0
+      - SELECT * FROM rotas_transporte WHERE empresa_id = bucket.empresa_id AND is_deleted = 0
+      - SELECT * FROM cte_documentos WHERE filial_id IN (
+          SELECT id FROM filiais WHERE empresa_id = bucket.empresa_id
+        ) AND created_at >= (NOW() - INTERVAL '60 days') AND is_deleted = 0
+      - SELECT * FROM operacoes_transporte WHERE filial_id IN (
+          SELECT id FROM filiais WHERE empresa_id = bucket.empresa_id
+        ) AND created_at >= (NOW() - INTERVAL '60 days') AND is_deleted = 0
+
