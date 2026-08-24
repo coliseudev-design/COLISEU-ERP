@@ -165,12 +165,15 @@ class SyncEngine {
             } else {
               currentList = [formatado, ...currentList];
             }
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(currentList));
+            localStorage.setItem('coliseu_pedidos_vendas_b2b', JSON.stringify(currentList));
+            localStorage.setItem('coliseu_pedidos_venda_list', JSON.stringify(currentList));
           } else if (event.action === 'DELETE' && event.id) {
             currentList = currentList.filter((item) => item.id !== event.id);
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(currentList));
+            localStorage.setItem('coliseu_pedidos_vendas_b2b', JSON.stringify(currentList));
+            localStorage.setItem('coliseu_pedidos_venda_list', JSON.stringify(currentList));
           } else if (event.action === 'RESET') {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+            localStorage.setItem('coliseu_pedidos_vendas_b2b', JSON.stringify([]));
+            localStorage.setItem('coliseu_pedidos_venda_list', JSON.stringify([]));
           }
         } catch (e) {
           console.warn('[SyncEngine] Erro ao sincronizar cache local de pedidos:', e);

@@ -453,7 +453,10 @@ const DEFAULT_PEDIDOS_VENDA: PedidoVendaItem[] = [
 
 export function getPedidosVenda(): PedidoVendaItem[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_PEDIDOS_VENDA);
+    let raw = localStorage.getItem(STORAGE_KEY_PEDIDOS_VENDA);
+    if (!raw) {
+      raw = localStorage.getItem('coliseu_pedidos_venda_list');
+    }
     if (!raw) {
       return [];
     }

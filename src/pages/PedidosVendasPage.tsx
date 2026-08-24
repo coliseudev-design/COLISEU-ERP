@@ -69,6 +69,12 @@ export const PedidosVendasPage: React.FC = () => {
     // 3. Carga inicial da Nuvem (PostgreSQL Central)
     const loadInitialCloudData = async () => {
       try {
+        const localList = getPedidosVenda();
+        // Se houver pedidos locais no terminal (Desktop ou Web), sincroniza com a Nuvem no primeiro boot
+        if (localList.length > 0) {
+          syncService.syncBatchPedidos(localList).catch(() => {});
+        }
+
         const cloudList = await syncService.fetchCloudPedidos();
         if (Array.isArray(cloudList) && cloudList.length > 0) {
           const map = new Map<string, PedidoVendaItem>();
@@ -131,7 +137,6 @@ export const PedidosVendasPage: React.FC = () => {
           });
 
           // Mesclar com pedidos locais reais
-          const localList = getPedidosVenda();
           localList.forEach((p) => {
             if (!map.has(p.id)) {
               map.set(p.id, p);
@@ -139,6 +144,7 @@ export const PedidosVendasPage: React.FC = () => {
           });
 
           const unificada = Array.from(map.values());
+          localStorage.setItem('coliseu_pedidos_vendas_b2b', JSON.stringify(unificada));
           localStorage.setItem('coliseu_pedidos_venda_list', JSON.stringify(unificada));
           setPedidos(unificada);
         }
