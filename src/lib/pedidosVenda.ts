@@ -455,13 +455,12 @@ export function getPedidosVenda(): PedidoVendaItem[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_PEDIDOS_VENDA);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEY_PEDIDOS_VENDA, JSON.stringify(DEFAULT_PEDIDOS_VENDA));
-      return DEFAULT_PEDIDOS_VENDA;
+      return [];
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_PEDIDOS_VENDA;
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    return DEFAULT_PEDIDOS_VENDA;
+    return [];
   }
 }
 
