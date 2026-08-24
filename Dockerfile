@@ -34,8 +34,8 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 # Copiar os arquivos estáticos compilados do estágio anterior
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Expor porta HTTP padrão
-EXPOSE 80
+# Expor portas HTTP
+EXPOSE 80 3000
 
 # Healthcheck do container
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
