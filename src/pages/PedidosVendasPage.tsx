@@ -57,21 +57,20 @@ export const PedidosVendasPage: React.FC = () => {
   };
 
   useEffect(() => {
+    // 1. Carrega dados locais imediatamente
+    setPedidos(getPedidosVenda());
+
+    // 2. Escuta eventos em tempo real do barramento Omni-Sync (SSE)
     const handleUpdate = () => {
       setPedidos(getPedidosVenda());
     };
     window.addEventListener('coliseu_pedidos_vendas_updated', handleUpdate);
 
-    // Sincronização em background:
-    const runSync = async () => {
+    // 3. Carga inicial da Nuvem (PostgreSQL Central)
+    const loadInitialCloudData = async () => {
       try {
-        const localList = getPedidosVenda();
-        // 1. Enviar lote de pedidos locais para a VPS (PostgreSQL Central)
-        await syncService.syncBatchPedidos(localList);
-
-        // 2. Buscar pedidos da Nuvem (PostgreSQL Central)
         const cloudList = await syncService.fetchCloudPedidos();
-        if (cloudList && cloudList.length > 0) {
+        if (Array.isArray(cloudList) && cloudList.length > 0) {
           const map = new Map<string, PedidoVendaItem>();
 
           cloudList.forEach((cp: any) => {
@@ -131,9 +130,10 @@ export const PedidosVendasPage: React.FC = () => {
             map.set(cp.id, itemFormatado);
           });
 
-          // Incluir pedidos locais reais que ainda não foram gravados no banco
-          localList.forEach(p => {
-            if (!map.has(p.id) && !p.id.startsWith('PED-00')) {
+          // Mesclar com pedidos locais reais
+          const localList = getPedidosVenda();
+          localList.forEach((p) => {
+            if (!map.has(p.id)) {
               map.set(p.id, p);
             }
           });
@@ -143,16 +143,14 @@ export const PedidosVendasPage: React.FC = () => {
           setPedidos(unificada);
         }
       } catch (err) {
-        console.warn('[Pedidos] Falha no ciclo de sincronização:', err);
+        console.warn('[Pedidos] Falha ao carregar pedidos da nuvem:', err);
       }
     };
 
-    runSync();
-    const interval = setInterval(runSync, 10000); // Polling a cada 10s
+    loadInitialCloudData();
 
     return () => {
       window.removeEventListener('coliseu_pedidos_vendas_updated', handleUpdate);
-      clearInterval(interval);
     };
   }, []);
 

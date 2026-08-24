@@ -31,10 +31,43 @@ const pool = new Pool(
       }
 );
 
+// Criação / Migração Automática da Tabela no PostgreSQL Central
+async function initDb() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pedidos_venda (
+        id TEXT PRIMARY KEY,
+        filial_id TEXT,
+        numero_pedido BIGINT,
+        data_emissao TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        cliente_id TEXT,
+        cliente_nome TEXT,
+        cliente_cpf_cnpj TEXT,
+        cliente_cidade TEXT,
+        cliente_uf TEXT,
+        vendedor_nome TEXT,
+        natureza_operacao TEXT,
+        quantidade_itens INT DEFAULT 1,
+        valor_total NUMERIC(15,2) DEFAULT 0,
+        status TEXT DEFAULT 'APROVADO',
+        device_id TEXT,
+        payload_json JSONB,
+        is_deleted BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+      ALTER TABLE pedidos_venda ADD COLUMN IF NOT EXISTS payload_json JSONB;
+      ALTER TABLE pedidos_venda ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
+    `);
+    console.log('[PostgreSQL Central] Tabela pedidos_venda pronta e validada.');
+  } catch (err) {
+    console.warn('[PostgreSQL Central] Aviso na inicialização de tabelas:', err.message);
+  }
+}
+initDb();
+
 // Fallbacks e Caches em memória
 let inMemoryPedidos = [];
-let inMemoryProdutos = [];
-let inMemoryPessoas = [];
 
 // =========================================================================
 // BARRAMENTO DE EVENTOS EM TEMPO REAL (SSE - SERVER-SENT EVENTS)
@@ -106,19 +139,11 @@ app.get('/api/health', (req, res) => {
 app.get('/api/health/db', async (req, res) => {
   let dbStatus = 'disconnected';
   let totalDbPedidos = 0;
-  let totalDbProdutos = 0;
-  let totalDbPessoas = 0;
 
   try {
-    const p1 = pool.query('SELECT count(*)::int as count FROM pedidos_venda');
-    const p2 = pool.query('SELECT count(*)::int as count FROM produtos');
-    const p3 = pool.query('SELECT count(*)::int as count FROM pessoas');
-    const [r1, r2, r3] = await Promise.allSettled([p1, p2, p3]);
-
+    const p1 = await pool.query('SELECT count(*)::int as count FROM pedidos_venda WHERE is_deleted = FALSE');
     dbStatus = 'connected';
-    if (r1.status === 'fulfilled') totalDbPedidos = r1.value.rows[0]?.count || 0;
-    if (r2.status === 'fulfilled') totalDbProdutos = r2.value.rows[0]?.count || 0;
-    if (r3.status === 'fulfilled') totalDbPessoas = r3.value.rows[0]?.count || 0;
+    totalDbPedidos = p1.rows[0]?.count || 0;
   } catch (e) {
     dbStatus = `error: ${e.message}`;
   }
@@ -128,8 +153,7 @@ app.get('/api/health/db', async (req, res) => {
     database: dbStatus,
     active_terminals: sseClients.size,
     total_db_pedidos: totalDbPedidos,
-    total_db_produtos: totalDbProdutos,
-    total_db_pessoas: totalDbPessoas,
+    in_memory_pedidos: inMemoryPedidos.length,
     timestamp: new Date().toISOString(),
   });
 });
@@ -137,6 +161,23 @@ app.get('/api/health/db', async (req, res) => {
 // =========================================================================
 // ROTAS UNIVERSAIS DE MUTAÇÃO E SINCRONIZAÇÃO EM TEMPO REAL
 // =========================================================================
+
+function parseDateForPg(dt) {
+  if (!dt) return new Date().toISOString();
+  if (typeof dt === 'string' && dt.includes('/')) {
+    const parts = dt.split('/');
+    if (parts.length === 3) {
+      const [d, m, y] = parts;
+      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T12:00:00.000Z`;
+    }
+  }
+  try {
+    const parsed = new Date(dt);
+    return isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+  } catch {
+    return new Date().toISOString();
+  }
+}
 
 // Reset / Limpar todos os pedidos da nuvem
 app.all('/api/pedidos/reset', async (req, res) => {
@@ -159,37 +200,62 @@ app.get('/api/pedidos', async (req, res) => {
       `SELECT id, filial_id, numero_pedido, data_emissao, cliente_id, cliente_nome,
               cliente_cpf_cnpj, cliente_cidade, cliente_uf, vendedor_nome,
               natureza_operacao, quantidade_itens, valor_total, status, device_id,
-              created_at, updated_at
+              payload_json, created_at, updated_at
        FROM pedidos_venda
+       WHERE is_deleted = FALSE
        ORDER BY data_emissao DESC, created_at DESC
        LIMIT 300`
     );
-    if (result.rows.length > 0) {
-      inMemoryPedidos = result.rows;
+
+    const pedidos = result.rows.map((r) => {
+      if (r.payload_json && typeof r.payload_json === 'object') {
+        return {
+          ...r.payload_json,
+          id: r.id,
+          numeroPedido: String(r.numero_pedido || r.payload_json.numeroPedido || '0'),
+          clienteNome: r.cliente_nome || r.payload_json.clienteNome || 'CLIENTE',
+          status: r.status || r.payload_json.status || 'APROVADO',
+          valorTotalFinal: parseFloat(r.valor_total || r.payload_json.valorTotalFinal || '0'),
+          dataEmissao: r.payload_json.dataEmissao || (r.data_emissao ? new Date(r.data_emissao).toLocaleDateString('pt-BR') : ''),
+        };
+      }
+      return {
+        id: r.id,
+        numeroPedido: String(r.numero_pedido || '0'),
+        tipoMovimento: 'SAIDA',
+        status: r.status || 'APROVADO',
+        dataEmissao: r.data_emissao ? new Date(r.data_emissao).toLocaleDateString('pt-BR') : '',
+        filialDepto: r.filial_id || 'MATRIZ - DOURADOS/MS',
+        clienteId: r.cliente_id || '',
+        clienteCodigo: '1',
+        clienteNome: r.cliente_nome || 'CLIENTE NÃO INFORMADO',
+        clienteCnpjCpf: r.cliente_cpf_cnpj || '',
+        clienteCidade: r.cliente_cidade || 'DOURADOS',
+        clienteUf: r.cliente_uf || 'MS',
+        naturezaOperacao: {
+          cfop: '5102',
+          descricao: r.natureza_operacao || '5102 - VENDA DE MERCADORIAS',
+          tipo: 'SAIDA',
+          geraFinanceiro: true,
+          movimentaEstoque: true,
+          destinacaoPadrao: 'ESTADUAL',
+        },
+        vendedorNome: r.vendedor_nome || 'CARLOS SILVA (INTERNO)',
+        totalProdutos: parseFloat(r.valor_total || '0'),
+        valorTotalFinal: parseFloat(r.valor_total || '0'),
+        itens: [],
+      };
+    });
+
+    if (pedidos.length > 0) {
+      inMemoryPedidos = pedidos;
     }
-    return res.json(result.rows);
+    return res.json(pedidos.length > 0 ? pedidos : inMemoryPedidos);
   } catch (err) {
     console.warn('[API] Falha ao consultar PostgreSQL, usando fallback:', err.message);
     return res.json(inMemoryPedidos);
   }
 });
-
-function parseDateForPg(dt) {
-  if (!dt) return new Date().toISOString();
-  if (typeof dt === 'string' && dt.includes('/')) {
-    const parts = dt.split('/');
-    if (parts.length === 3) {
-      const [d, m, y] = parts;
-      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T12:00:00.000Z`;
-    }
-  }
-  try {
-    const parsed = new Date(dt);
-    return isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
-  } catch {
-    return new Date().toISOString();
-  }
-}
 
 // Salvar / Atualizar Pedido Individual (Com Broadcast Imediato)
 app.post('/api/pedidos', async (req, res) => {
@@ -208,8 +274,9 @@ app.post('/api/pedidos', async (req, res) => {
       `INSERT INTO pedidos_venda (
         id, filial_id, numero_pedido, data_emissao, cliente_id, cliente_nome,
         cliente_cpf_cnpj, cliente_cidade, cliente_uf, vendedor_nome,
-        natureza_operacao, quantidade_itens, valor_total, status, device_id, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CURRENT_TIMESTAMP)
+        natureza_operacao, quantidade_itens, valor_total, status, device_id,
+        payload_json, is_deleted, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, FALSE, CURRENT_TIMESTAMP)
       ON CONFLICT (id) DO UPDATE SET
         numero_pedido = EXCLUDED.numero_pedido,
         cliente_nome = EXCLUDED.cliente_nome,
@@ -221,6 +288,8 @@ app.post('/api/pedidos', async (req, res) => {
         quantidade_itens = EXCLUDED.quantidade_itens,
         valor_total = EXCLUDED.valor_total,
         status = EXCLUDED.status,
+        payload_json = EXCLUDED.payload_json,
+        is_deleted = FALSE,
         updated_at = CURRENT_TIMESTAMP
       RETURNING *`,
       [
@@ -239,21 +308,22 @@ app.post('/api/pedidos', async (req, res) => {
         valorFinal,
         p.status || 'APROVADO',
         p.device_id || 'DESKTOP-LOCAL',
+        JSON.stringify(p),
       ]
     );
 
     const saved = result.rows[0];
-    inMemoryPedidos = [saved, ...inMemoryPedidos.filter((item) => item.id !== saved.id)];
+    inMemoryPedidos = [p, ...inMemoryPedidos.filter((item) => item.id !== p.id)];
     
     // Broadcast em tempo real para todos os outros terminais
     broadcastMutation({
       entity: 'pedidos_venda',
       action: 'UPSERT',
-      id: saved.id,
-      payload: saved,
+      id: p.id,
+      payload: p,
     });
 
-    return res.json({ success: true, pedido: saved });
+    return res.json({ success: true, pedido: p });
   } catch (err) {
     console.warn('[API] Erro ao gravar pedido no PostgreSQL:', err.message);
     const fallbackItem = { ...p, updated_at: new Date().toISOString() };
@@ -274,7 +344,7 @@ app.post('/api/pedidos', async (req, res) => {
 app.delete('/api/pedidos/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    await pool.query('DELETE FROM pedidos_venda WHERE id = $1', [id]);
+    await pool.query('UPDATE pedidos_venda SET is_deleted = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [id]);
     inMemoryPedidos = inMemoryPedidos.filter((p) => p.id !== id);
 
     broadcastMutation({
@@ -309,26 +379,30 @@ app.post('/api/pedidos/batch', async (req, res) => {
     const numeroLimpo = parseInt(String(p.numeroPedido || p.numero_pedido || '0').replace(/\D/g, ''), 10) || 0;
     const valorFinal = parseFloat(p.valorTotalFinal || p.valor_total || '0');
     const qtdItens = Array.isArray(p.itens) ? p.itens.length : (p.quantidade_itens || 1);
+    const dataEmissaoPg = parseDateForPg(p.data_emissao || p.dataEmissao);
 
     try {
       await pool.query(
         `INSERT INTO pedidos_venda (
           id, filial_id, numero_pedido, data_emissao, cliente_id, cliente_nome,
           cliente_cpf_cnpj, cliente_cidade, cliente_uf, vendedor_nome,
-          natureza_operacao, quantidade_itens, valor_total, status, device_id, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CURRENT_TIMESTAMP)
+          natureza_operacao, quantidade_itens, valor_total, status, device_id,
+          payload_json, is_deleted, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, FALSE, CURRENT_TIMESTAMP)
         ON CONFLICT (id) DO UPDATE SET
           numero_pedido = EXCLUDED.numero_pedido,
           cliente_nome = EXCLUDED.cliente_nome,
           valor_total = EXCLUDED.valor_total,
           status = EXCLUDED.status,
           quantidade_itens = EXCLUDED.quantidade_itens,
+          payload_json = EXCLUDED.payload_json,
+          is_deleted = FALSE,
           updated_at = CURRENT_TIMESTAMP`,
         [
           p.id,
           p.filial_id || p.filialDepto || 'fil-matriz-001',
           numeroLimpo,
-          p.data_emissao || p.dataEmissao || new Date().toISOString(),
+          dataEmissaoPg,
           p.cliente_id || p.clienteId || null,
           p.cliente_nome || p.clienteNome || 'CLIENTE NÃO INFORMADO',
           p.cliente_cpf_cnpj || p.clienteCnpjCpf || null,
@@ -340,6 +414,7 @@ app.post('/api/pedidos/batch', async (req, res) => {
           valorFinal,
           p.status || 'APROVADO',
           p.device_id || 'DESKTOP-LOCAL',
+          JSON.stringify(p),
         ]
       );
       inseridos++;
@@ -356,74 +431,6 @@ app.post('/api/pedidos/batch', async (req, res) => {
   });
 
   res.json({ success: true, processados: pedidos.length, inseridos });
-});
-
-// =========================================================================
-// PRODUTOS & BAIXA ATÔMICA DE ESTOQUE (MULTI-TERMINAL)
-// =========================================================================
-
-// Alteração de Estoque Delta (Zero Race Condition)
-app.post('/api/produtos/:id/estoque-delta', async (req, res) => {
-  const { id } = req.params;
-  const { delta_quantidade, motivo } = req.body;
-  const delta = parseFloat(delta_quantidade || '0');
-
-  try {
-    const result = await pool.query(
-      `UPDATE produtos
-       SET saldo_fisico = COALESCE(saldo_fisico, 0) + $1,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $2
-       RETURNING id, descricao, saldo_fisico, preco_venda, updated_at`,
-      [delta, id]
-    );
-
-    const updated = result.rows[0];
-    if (updated) {
-      broadcastMutation({
-        entity: 'produtos',
-        action: 'STOCK_DELTA',
-        id: updated.id,
-        payload: { ...updated, motivo },
-      });
-      return res.json({ success: true, produto: updated });
-    }
-    return res.status(404).json({ error: 'Produto não encontrado' });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-// Alteração de Preço de Produto
-app.post('/api/produtos/:id/preco', async (req, res) => {
-  const { id } = req.params;
-  const { preco_venda, preco_custo } = req.body;
-
-  try {
-    const result = await pool.query(
-      `UPDATE produtos
-       SET preco_venda = COALESCE($1, preco_venda),
-           preco_custo = COALESCE($2, preco_custo),
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $3
-       RETURNING id, descricao, preco_venda, preco_custo, saldo_fisico, updated_at`,
-      [preco_venda, preco_custo, id]
-    );
-
-    const updated = result.rows[0];
-    if (updated) {
-      broadcastMutation({
-        entity: 'produtos',
-        action: 'PRICE_UPDATE',
-        id: updated.id,
-        payload: updated,
-      });
-      return res.json({ success: true, produto: updated });
-    }
-    return res.status(404).json({ error: 'Produto não encontrado' });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
 });
 
 // =========================================================================
