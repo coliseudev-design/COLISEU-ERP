@@ -35,6 +35,22 @@ const pool = new Pool(
 async function initDb() {
   try {
     await pool.query(`
+      -- 0. Garantir Empresa Matriz Padrão
+      CREATE TABLE IF NOT EXISTS empresas (
+        id VARCHAR(64) PRIMARY KEY,
+        razao_social VARCHAR(255) NOT NULL,
+        nome_fantasia VARCHAR(255),
+        cnpj VARCHAR(20) NOT NULL UNIQUE,
+        uf VARCHAR(2) NOT NULL DEFAULT 'MS',
+        regime_tributario VARCHAR(30) NOT NULL DEFAULT 'SIMPLES_NACIONAL',
+        ativo BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      INSERT INTO empresas (id, razao_social, nome_fantasia, cnpj, uf, regime_tributario)
+      VALUES ('emp-matriz-001', 'COLISEU SISTEMAS LTDA', 'COLISEU MATRIZ', '05766577000122', 'MS', 'SIMPLES_NACIONAL')
+      ON CONFLICT (id) DO NOTHING;
+
       -- 1. Tabela de Pedidos de Venda
       CREATE TABLE IF NOT EXISTS pedidos_venda (
         id TEXT PRIMARY KEY,
@@ -60,50 +76,61 @@ async function initDb() {
       ALTER TABLE pedidos_venda ADD COLUMN IF NOT EXISTS payload_json JSONB;
       ALTER TABLE pedidos_venda ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
 
-      -- 2. Tabela de Pessoas / Clientes / Fornecedores / Transportadores
+      -- 2. Tabela de Pessoas / Clientes / Fornecedores
       CREATE TABLE IF NOT EXISTS pessoas (
-        id TEXT PRIMARY KEY,
-        codigo TEXT,
-        tipo TEXT DEFAULT 'CLIENTE',
-        tipo_pessoa TEXT DEFAULT 'JURÍDICA',
-        nome TEXT NOT NULL,
-        nome_fantasia TEXT,
-        cpf_cnpj TEXT,
-        rg_ie TEXT,
-        cidade TEXT,
-        uf TEXT,
-        telefone TEXT,
-        celular TEXT,
-        email TEXT,
-        limite_credito NUMERIC(15,2) DEFAULT 0,
-        status TEXT DEFAULT 'Ativo',
-        payload_json JSONB,
-        is_deleted BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        id VARCHAR(64) PRIMARY KEY,
+        device_id VARCHAR(64) NOT NULL DEFAULT 'server',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+        empresa_id VARCHAR(64) NOT NULL DEFAULT 'emp-matriz-001',
+        tipo_cadastro VARCHAR(30) NOT NULL DEFAULT 'CLIENTE',
+        tipo_pessoa VARCHAR(10) NOT NULL DEFAULT 'FISICA',
+        nome_razaosocial VARCHAR(255) NOT NULL,
+        nome_fantasia VARCHAR(255),
+        cpf_cnpj VARCHAR(20),
+        codigo_interno VARCHAR(50),
+        rg_ie VARCHAR(30),
+        inscricao_municipal VARCHAR(30),
+        cep VARCHAR(10),
+        logradouro VARCHAR(255),
+        numero VARCHAR(30),
+        complemento VARCHAR(100),
+        bairro VARCHAR(100),
+        municipio VARCHAR(100),
+        uf VARCHAR(2),
+        email VARCHAR(150),
+        email_financeiro VARCHAR(150),
+        telefone VARCHAR(30),
+        celular VARCHAR(30),
+        limite_credito NUMERIC(15,2) DEFAULT 5000.00,
+        score_credito INT DEFAULT 700,
+        observacoes TEXT,
+        ativo BOOLEAN NOT NULL DEFAULT TRUE,
+        payload_json JSONB
       );
       ALTER TABLE pessoas ADD COLUMN IF NOT EXISTS payload_json JSONB;
       ALTER TABLE pessoas ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
 
-      -- 3. Tabela de Produtos / Estoque / Catálogo
+      -- 3. Tabela de Produtos / Catálogo / Estoque
       CREATE TABLE IF NOT EXISTS produtos (
-        id TEXT PRIMARY KEY,
-        codigo TEXT,
-        sku TEXT,
-        codigo_barras TEXT,
-        descricao TEXT NOT NULL,
-        unidade TEXT DEFAULT 'UN',
-        ncm TEXT,
-        preco_custo NUMERIC(15,2) DEFAULT 0,
-        preco_venda NUMERIC(15,2) DEFAULT 0,
-        estoque_atual NUMERIC(15,3) DEFAULT 0,
-        estoque_minimo NUMERIC(15,3) DEFAULT 0,
-        marca TEXT,
-        categoria TEXT,
-        payload_json JSONB,
-        is_deleted BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        id VARCHAR(64) PRIMARY KEY,
+        device_id VARCHAR(64) NOT NULL DEFAULT 'server',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+        empresa_id VARCHAR(64) NOT NULL DEFAULT 'emp-matriz-001',
+        codigo_sku VARCHAR(50) NOT NULL,
+        codigo_barras VARCHAR(50),
+        descricao VARCHAR(255) NOT NULL,
+        unidade_medida VARCHAR(10) NOT NULL DEFAULT 'UN',
+        preco_custo NUMERIC(15,4) NOT NULL DEFAULT 0.0000,
+        preco_venda NUMERIC(15,4) NOT NULL DEFAULT 0.0000,
+        preco_minimo NUMERIC(15,4) DEFAULT 0.0000,
+        ncm VARCHAR(10),
+        estoque_minimo NUMERIC(15,4) DEFAULT 0.0000,
+        ativo BOOLEAN NOT NULL DEFAULT TRUE,
+        payload_json JSONB
       );
       ALTER TABLE produtos ADD COLUMN IF NOT EXISTS payload_json JSONB;
       ALTER TABLE produtos ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
@@ -122,10 +149,10 @@ async function initDb() {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
-      -- 5. Tabela de Lançamentos Financeiros (Títulos a Pagar / Receber)
+      -- 5. Tabela de Lançamentos Financeiros (Títulos)
       CREATE TABLE IF NOT EXISTS financeiro_titulos (
         id TEXT PRIMARY KEY,
-        tipo TEXT, -- RECEBER / PAGAR
+        tipo TEXT,
         descricao TEXT,
         pessoa_nome TEXT,
         valor NUMERIC(15,2) DEFAULT 0,
@@ -140,7 +167,7 @@ async function initDb() {
       -- 6. Tabela de Frotas / Transporte / CT-e / MDF-e
       CREATE TABLE IF NOT EXISTS transporte_cadastros (
         id TEXT PRIMARY KEY,
-        tipo_registro TEXT, -- VEICULO, MOTORISTA, ROTA, TABELA_FRETE, CTE, VIAGEM
+        tipo_registro TEXT,
         identificador TEXT,
         payload_json JSONB,
         is_deleted BOOLEAN DEFAULT FALSE,
@@ -148,7 +175,7 @@ async function initDb() {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    console.log('[PostgreSQL Central] Todas as tabelas Omni-Sync prontas e validadas.');
+    console.log('[PostgreSQL Central] Schema Omni-Sync verificado com sucesso.');
   } catch (err) {
     console.warn('[PostgreSQL Central] Aviso na inicialização de tabelas:', err.message);
   }
@@ -186,7 +213,6 @@ export function broadcastMutation(event) {
   }
 }
 
-// Endpoint de Stream de Eventos em Tempo Real para todos os terminais
 app.get('/api/sync/stream', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -195,7 +221,6 @@ app.get('/api/sync/stream', (req, res) => {
   res.flushHeaders?.();
 
   res.write(`event: connected\ndata: ${JSON.stringify({ status: 'connected', clients_count: sseClients.size + 1 })}\n\n`);
-
   sseClients.add(res);
 
   const interval = setInterval(() => {
@@ -257,7 +282,6 @@ app.get('/api/health/db', async (req, res) => {
   });
 });
 
-// Helper de Datas
 function parseDateForPg(dt) {
   if (!dt) return new Date().toISOString();
   if (typeof dt === 'string' && dt.includes('/')) {
@@ -282,18 +306,51 @@ function parseDateForPg(dt) {
 app.get('/api/pessoas', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, codigo, tipo, tipo_pessoa, nome, nome_fantasia, cpf_cnpj, rg_ie,
-              cidade, uf, telefone, celular, email, limite_credito, status, payload_json, updated_at
+      `SELECT id, empresa_id, codigo_interno, tipo_cadastro, tipo_pessoa,
+              nome_razaosocial, nome_fantasia, cpf_cnpj, rg_ie,
+              cep, logradouro, numero, bairro, municipio, uf,
+              telefone, celular, email, limite_credito, ativo,
+              payload_json, updated_at
        FROM pessoas
        WHERE is_deleted = FALSE
        ORDER BY updated_at DESC LIMIT 5000`
     );
+
     const lista = result.rows.map((r) => {
       if (r.payload_json && typeof r.payload_json === 'object') {
-        return { ...r.payload_json, id: r.id, nome: r.nome, status: r.status };
+        return {
+          ...r.payload_json,
+          id: r.id,
+          nome: r.nome_razaosocial || r.payload_json.nome,
+          nomeAbrev: r.nome_fantasia || r.payload_json.nomeAbrev || r.nome_razaosocial,
+          cpfCnpj: r.cpf_cnpj || r.payload_json.cpfCnpj,
+          codigo: r.codigo_interno || r.payload_json.codigo || '001',
+          status: r.ativo ? 'Ativo' : 'Bloqueado',
+        };
       }
-      return r;
+      return {
+        id: r.id,
+        codigo: r.codigo_interno || '001',
+        tipo: r.tipo_cadastro || 'CLIENTE',
+        tipoPessoa: r.tipo_pessoa === 'JURIDICA' ? 'JURÍDICA' : 'FÍSICA',
+        nome: r.nome_razaosocial,
+        nomeAbrev: r.nome_fantasia || r.nome_razaosocial,
+        cpfCnpj: r.cpf_cnpj || '',
+        rg: r.rg_ie || '',
+        cep: r.cep || '',
+        endereco: r.logradouro || '',
+        numero: r.numero || '',
+        bairro: r.bairro || '',
+        municipio: r.municipio || 'DOURADOS',
+        uf: r.uf || 'MS',
+        foneRes: r.telefone || '',
+        celularWhats: r.celular || '',
+        emailPrincipal: r.email || '',
+        limiteCredito: parseFloat(r.limite_credito || '0'),
+        status: r.ativo ? 'Ativo' : 'Bloqueado',
+      };
     });
+
     if (lista.length > 0) inMemoryPessoas = lista;
     return res.json(lista.length > 0 ? lista : inMemoryPessoas);
   } catch (err) {
@@ -308,47 +365,62 @@ app.post('/api/pessoas', async (req, res) => {
     return res.status(400).json({ error: 'Payload de pessoa inválido (id obrigatório)' });
   }
 
+  const nome = (p.nome || p.nome_razaosocial || 'CLIENTE').toUpperCase();
+  const nomeFantasia = (p.nomeAbrev || p.nome_fantasia || nome).toUpperCase();
+  const cpfCnpj = (p.cpfCnpj || p.cpf_cnpj || '').replace(/\D/g, '') || null;
+
   try {
     await pool.query(
       `INSERT INTO pessoas (
-        id, codigo, tipo, tipo_pessoa, nome, nome_fantasia, cpf_cnpj, rg_ie,
-        cidade, uf, telefone, celular, email, limite_credito, status,
+        id, empresa_id, codigo_interno, tipo_cadastro, tipo_pessoa,
+        nome_razaosocial, nome_fantasia, cpf_cnpj, rg_ie,
+        cep, logradouro, numero, bairro, municipio, uf,
+        telefone, celular, email, limite_credito, ativo,
         payload_json, is_deleted, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, FALSE, CURRENT_TIMESTAMP)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, FALSE, CURRENT_TIMESTAMP)
       ON CONFLICT (id) DO UPDATE SET
-        codigo = EXCLUDED.codigo,
-        tipo = EXCLUDED.tipo,
+        codigo_interno = EXCLUDED.codigo_interno,
+        tipo_cadastro = EXCLUDED.tipo_cadastro,
         tipo_pessoa = EXCLUDED.tipo_pessoa,
-        nome = EXCLUDED.nome,
+        nome_razaosocial = EXCLUDED.nome_razaosocial,
         nome_fantasia = EXCLUDED.nome_fantasia,
         cpf_cnpj = EXCLUDED.cpf_cnpj,
         rg_ie = EXCLUDED.rg_ie,
-        cidade = EXCLUDED.cidade,
+        cep = EXCLUDED.cep,
+        logradouro = EXCLUDED.logradouro,
+        numero = EXCLUDED.numero,
+        bairro = EXCLUDED.bairro,
+        municipio = EXCLUDED.municipio,
         uf = EXCLUDED.uf,
         telefone = EXCLUDED.telefone,
         celular = EXCLUDED.celular,
         email = EXCLUDED.email,
         limite_credito = EXCLUDED.limite_credito,
-        status = EXCLUDED.status,
+        ativo = EXCLUDED.ativo,
         payload_json = EXCLUDED.payload_json,
         is_deleted = FALSE,
         updated_at = CURRENT_TIMESTAMP`,
       [
         p.id,
-        p.codigo || '001',
-        p.tipo || 'CLIENTE',
-        p.tipoPessoa || p.tipo_pessoa || 'JURÍDICA',
-        p.nome || 'CLIENTE',
-        p.nomeAbrev || p.nome_fantasia || p.nome || '',
-        p.cpfCnpj || p.cpf_cnpj || null,
+        p.empresa_id || 'emp-matriz-001',
+        p.codigo || p.codigo_interno || '001',
+        p.tipo || p.tipo_cadastro || 'CLIENTE',
+        (p.tipoPessoa || p.tipo_pessoa || 'FISICA').toUpperCase().includes('JUR') ? 'JURIDICA' : 'FISICA',
+        nome,
+        nomeFantasia,
+        cpfCnpj,
         p.rg || p.rg_ie || p.inscEstadual || null,
+        p.cep || null,
+        p.endereco || p.logradouro || null,
+        p.numero || null,
+        p.bairro || null,
         p.municipio || p.cidade || 'DOURADOS',
         p.uf || 'MS',
-        p.foneRes || p.telefone || '',
-        p.celularWhats || p.celular || '',
-        p.emailPrincipal || p.email || '',
+        p.foneRes || p.telefone || null,
+        p.celularWhats || p.celular || null,
+        p.emailPrincipal || p.email || null,
         parseFloat(p.limiteCredito || p.limite_credito || '0') || 0,
-        p.status || 'Ativo',
+        p.status !== 'Bloqueado',
         JSON.stringify(p),
       ]
     );
@@ -368,7 +440,7 @@ app.post('/api/pessoas', async (req, res) => {
     const fallbackItem = { ...p, updated_at: new Date().toISOString() };
     inMemoryPessoas = [fallbackItem, ...inMemoryPessoas.filter((item) => item.id !== p.id)];
     broadcastMutation({ entity: 'pessoas', action: 'UPSERT', id: p.id, payload: fallbackItem });
-    return res.json({ success: true, pessoa: fallbackItem, fallback: true });
+    return res.json({ success: true, pessoa: fallbackItem, fallback: true, error: err.message });
   }
 });
 
@@ -386,7 +458,6 @@ app.delete('/api/pessoas/:id', async (req, res) => {
   }
 });
 
-// Sincronização em Lote de Pessoas
 app.post('/api/pessoas/batch', async (req, res) => {
   const { pessoas } = req.body;
   if (!Array.isArray(pessoas) || pessoas.length === 0) {
@@ -395,38 +466,50 @@ app.post('/api/pessoas/batch', async (req, res) => {
 
   let count = 0;
   for (const p of pessoas) {
+    const nome = (p.nome || p.nome_razaosocial || 'CLIENTE').toUpperCase();
+    const nomeFantasia = (p.nomeAbrev || p.nome_fantasia || nome).toUpperCase();
+    const cpfCnpj = (p.cpfCnpj || p.cpf_cnpj || '').replace(/\D/g, '') || null;
+
     try {
       await pool.query(
         `INSERT INTO pessoas (
-          id, codigo, tipo, tipo_pessoa, nome, nome_fantasia, cpf_cnpj, rg_ie,
-          cidade, uf, telefone, celular, email, limite_credito, status,
+          id, empresa_id, codigo_interno, tipo_cadastro, tipo_pessoa,
+          nome_razaosocial, nome_fantasia, cpf_cnpj, rg_ie,
+          cep, logradouro, numero, bairro, municipio, uf,
+          telefone, celular, email, limite_credito, ativo,
           payload_json, is_deleted, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, FALSE, CURRENT_TIMESTAMP)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, FALSE, CURRENT_TIMESTAMP)
         ON CONFLICT (id) DO UPDATE SET
-          nome = EXCLUDED.nome,
+          codigo_interno = EXCLUDED.codigo_interno,
+          tipo_cadastro = EXCLUDED.tipo_cadastro,
+          nome_razaosocial = EXCLUDED.nome_razaosocial,
           nome_fantasia = EXCLUDED.nome_fantasia,
           cpf_cnpj = EXCLUDED.cpf_cnpj,
           limite_credito = EXCLUDED.limite_credito,
-          status = EXCLUDED.status,
           payload_json = EXCLUDED.payload_json,
           is_deleted = FALSE,
           updated_at = CURRENT_TIMESTAMP`,
         [
           p.id,
-          p.codigo || '001',
-          p.tipo || 'CLIENTE',
-          p.tipoPessoa || p.tipo_pessoa || 'JURÍDICA',
-          p.nome || 'CLIENTE',
-          p.nomeAbrev || p.nome_fantasia || p.nome || '',
-          p.cpfCnpj || p.cpf_cnpj || null,
+          p.empresa_id || 'emp-matriz-001',
+          p.codigo || p.codigo_interno || '001',
+          p.tipo || p.tipo_cadastro || 'CLIENTE',
+          (p.tipoPessoa || p.tipo_pessoa || 'FISICA').toUpperCase().includes('JUR') ? 'JURIDICA' : 'FISICA',
+          nome,
+          nomeFantasia,
+          cpfCnpj,
           p.rg || p.rg_ie || p.inscEstadual || null,
+          p.cep || null,
+          p.endereco || p.logradouro || null,
+          p.numero || null,
+          p.bairro || null,
           p.municipio || p.cidade || 'DOURADOS',
           p.uf || 'MS',
-          p.foneRes || p.telefone || '',
-          p.celularWhats || p.celular || '',
-          p.emailPrincipal || p.email || '',
+          p.foneRes || p.telefone || null,
+          p.celularWhats || p.celular || null,
+          p.emailPrincipal || p.email || null,
           parseFloat(p.limiteCredito || p.limite_credito || '0') || 0,
-          p.status || 'Ativo',
+          p.status !== 'Bloqueado',
           JSON.stringify(p),
         ]
       );
@@ -447,8 +530,8 @@ app.post('/api/pessoas/batch', async (req, res) => {
 app.get('/api/produtos', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, codigo, sku, codigo_barras, descricao, unidade, ncm,
-              preco_custo, preco_venda, estoque_atual, estoque_minimo, marca, categoria,
+      `SELECT id, empresa_id, codigo_sku, codigo_barras, descricao, unidade_medida, ncm,
+              preco_custo, preco_venda, estoque_minimo, ativo,
               payload_json, updated_at
        FROM produtos
        WHERE is_deleted = FALSE
@@ -461,10 +544,20 @@ app.get('/api/produtos', async (req, res) => {
           id: r.id,
           precoVenda: parseFloat(r.preco_venda || r.payload_json.precoVenda || 0),
           precoCusto: parseFloat(r.preco_custo || r.payload_json.precoCusto || 0),
-          estoqueAtual: parseFloat(r.estoque_atual || r.payload_json.estoqueAtual || 0),
         };
       }
-      return r;
+      return {
+        id: r.id,
+        sku: r.codigo_sku,
+        codigo: r.codigo_sku,
+        codigoBarras: r.codigo_barras || '',
+        descricao: r.descricao,
+        unidade: r.unidade_medida || 'UN',
+        ncm: r.ncm || '',
+        precoCusto: parseFloat(r.preco_custo || '0'),
+        precoVenda: parseFloat(r.preco_venda || '0'),
+        estoqueMinimo: parseFloat(r.estoque_minimo || '0'),
+      };
     });
     if (lista.length > 0) inMemoryProdutos = lista;
     return res.json(lista.length > 0 ? lista : inMemoryProdutos);
@@ -480,43 +573,41 @@ app.post('/api/produtos', async (req, res) => {
     return res.status(400).json({ error: 'Payload de produto inválido (id obrigatório)' });
   }
 
+  const sku = p.sku || p.codigo_sku || p.codigo || `SKU-${Date.now().toString().slice(-5)}`;
+  const desc = (p.descricao || 'PRODUTO').toUpperCase();
+
   try {
     await pool.query(
       `INSERT INTO produtos (
-        id, codigo, sku, codigo_barras, descricao, unidade, ncm,
-        preco_custo, preco_venda, estoque_atual, estoque_minimo, marca, categoria,
+        id, empresa_id, codigo_sku, codigo_barras, descricao, unidade_medida, ncm,
+        preco_custo, preco_venda, estoque_minimo, ativo,
         payload_json, is_deleted, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, FALSE, CURRENT_TIMESTAMP)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, FALSE, CURRENT_TIMESTAMP)
       ON CONFLICT (id) DO UPDATE SET
-        codigo = EXCLUDED.codigo,
-        sku = EXCLUDED.sku,
+        codigo_sku = EXCLUDED.codigo_sku,
         codigo_barras = EXCLUDED.codigo_barras,
         descricao = EXCLUDED.descricao,
-        unidade = EXCLUDED.unidade,
+        unidade_medida = EXCLUDED.unidade_medida,
         ncm = EXCLUDED.ncm,
         preco_custo = EXCLUDED.preco_custo,
         preco_venda = EXCLUDED.preco_venda,
-        estoque_atual = EXCLUDED.estoque_atual,
         estoque_minimo = EXCLUDED.estoque_minimo,
-        marca = EXCLUDED.marca,
-        categoria = EXCLUDED.categoria,
+        ativo = EXCLUDED.ativo,
         payload_json = EXCLUDED.payload_json,
         is_deleted = FALSE,
         updated_at = CURRENT_TIMESTAMP`,
       [
         p.id,
-        p.codigo || p.sku || '',
-        p.sku || p.codigo || '',
-        p.codigoBarras || p.codigo_barras || '',
-        p.descricao || 'PRODUTO',
-        p.unidade || 'UN',
-        p.ncm || '',
+        p.empresa_id || 'emp-matriz-001',
+        sku,
+        p.codigoBarras || p.codigo_barras || null,
+        desc,
+        p.unidade || p.unidade_medida || 'UN',
+        p.ncm || null,
         parseFloat(p.precoCusto || p.preco_custo || '0') || 0,
         parseFloat(p.precoVenda || p.preco_venda || '0') || 0,
-        parseFloat(p.estoqueAtual || p.estoque_atual || '0') || 0,
         parseFloat(p.estoqueMinimo || p.estoque_minimo || '0') || 0,
-        p.marca || '',
-        p.categoria || '',
+        p.ativo !== false,
         JSON.stringify(p),
       ]
     );
@@ -536,7 +627,7 @@ app.post('/api/produtos', async (req, res) => {
     const fallbackItem = { ...p, updated_at: new Date().toISOString() };
     inMemoryProdutos = [fallbackItem, ...inMemoryProdutos.filter((item) => item.id !== p.id)];
     broadcastMutation({ entity: 'produtos', action: 'UPSERT', id: p.id, payload: fallbackItem });
-    return res.json({ success: true, produto: fallbackItem, fallback: true });
+    return res.json({ success: true, produto: fallbackItem, fallback: true, error: err.message });
   }
 });
 
@@ -546,34 +637,14 @@ app.post('/api/produtos/:id/estoque-delta', async (req, res) => {
   const { delta_quantidade, motivo } = req.body;
   const delta = parseFloat(delta_quantidade) || 0;
 
-  try {
-    const result = await pool.query(
-      `UPDATE produtos
-       SET estoque_atual = estoque_atual + $1, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $2 OR sku = $2 OR codigo = $2
-       RETURNING id, sku, descricao, estoque_atual, preco_venda`,
-      [delta, id]
-    );
+  broadcastMutation({
+    entity: 'produtos',
+    action: 'STOCK_DELTA',
+    id,
+    payload: { id, delta_quantidade: delta, motivo },
+  });
 
-    const updated = result.rows[0] || { id, delta_quantidade: delta, motivo };
-
-    broadcastMutation({
-      entity: 'produtos',
-      action: 'STOCK_DELTA',
-      id,
-      payload: { id, delta_quantidade: delta, motivo, estoque_atual: updated.estoque_atual },
-    });
-
-    return res.json({ success: true, produto: updated });
-  } catch (err) {
-    broadcastMutation({
-      entity: 'produtos',
-      action: 'STOCK_DELTA',
-      id,
-      payload: { id, delta_quantidade: delta, motivo },
-    });
-    return res.json({ success: true, id, delta_quantidade: delta, fallback: true });
-  }
+  return res.json({ success: true, id, delta_quantidade: delta });
 });
 
 app.delete('/api/produtos/:id', async (req, res) => {
