@@ -1113,41 +1113,51 @@ export const PessoasPage: React.FC = () => {
     showToast(`🗑️ ${target.tipo} '${target.nome}' removido.`);
   };
 
-  // Filtragem Unificada por Tipo e Busca
+  // Filtragem Unificada por Tipo e Busca (100% Protegida contra campos nulos)
   const filteredPessoas = useMemo(() => {
-    const q = searchTerm.toLowerCase().trim();
-    return pessoas.filter((p) => {
+    const q = (searchTerm || '').toLowerCase().trim();
+    return (pessoas || []).filter((p) => {
+      if (!p) return false;
+      const tipo = String(p.tipo || 'CLIENTE').toUpperCase();
+      const status = String(p.status || 'Ativo');
+
       // Filtro por Tipo de Cadastro
-      if (selectedTipoFiltro === 'CLIENTES' && !p.tipo.includes('CLIENTE')) return false;
-      if (selectedTipoFiltro === 'FORNECEDORES' && !p.tipo.includes('FORNECEDOR')) return false;
-      if (selectedTipoFiltro === 'TRANSPORTADORES' && p.tipo !== 'TRANSPORTADOR') return false;
-      if (selectedTipoFiltro === 'PRODUTORES_REV' && p.tipo !== 'PRODUTOR' && p.tipo !== 'REVENDEDOR') return false;
-      if (selectedTipoFiltro === 'FUNCIONARIOS' && p.tipo !== 'FUNCIONARIO') return false;
+      if (selectedTipoFiltro === 'CLIENTES' && !tipo.includes('CLIENTE')) return false;
+      if (selectedTipoFiltro === 'FORNECEDORES' && !tipo.includes('FORNECEDOR')) return false;
+      if (selectedTipoFiltro === 'TRANSPORTADORES' && tipo !== 'TRANSPORTADOR') return false;
+      if (selectedTipoFiltro === 'PRODUTORES_REV' && tipo !== 'PRODUTOR' && tipo !== 'REVENDEDOR') return false;
+      if (selectedTipoFiltro === 'FUNCIONARIOS' && tipo !== 'FUNCIONARIO') return false;
 
       // Filtro de Status
-      if (filterActiveOnly && p.status !== 'Ativo') return false;
+      if (filterActiveOnly && status !== 'Ativo') return false;
 
       // Busca Textual
       if (!q) return true;
+      const nome = String(p.nome || '').toLowerCase();
+      const nomeAbrev = String(p.nomeAbrev || '').toLowerCase();
+      const cpfCnpj = String(p.cpfCnpj || '');
+      const codigo = String(p.codigo || '');
+      const municipio = String(p.municipio || '').toLowerCase();
+
       return (
-        p.nome.toLowerCase().includes(q) ||
-        p.nomeAbrev.toLowerCase().includes(q) ||
-        p.cpfCnpj.includes(q) ||
-        p.codigo.includes(q) ||
-        p.municipio.toLowerCase().includes(q) ||
-        p.tipo.toLowerCase().includes(q)
+        nome.includes(q) ||
+        nomeAbrev.includes(q) ||
+        cpfCnpj.includes(q) ||
+        codigo.includes(q) ||
+        municipio.includes(q) ||
+        tipo.toLowerCase().includes(q)
       );
     });
   }, [pessoas, searchTerm, selectedTipoFiltro, filterActiveOnly]);
 
-  const activePessoa = pessoas.find((p) => p.id === selectedPessoaId) || pessoas[0] || INITIAL_PESSOAS[0];
+  const activePessoa = (pessoas || []).find((p) => p.id === selectedPessoaId) || pessoas[0] || INITIAL_PESSOAS[0];
 
   // Métricas Consolidadas
-  const totalCount = pessoas.length;
-  const clientesCount = pessoas.filter((p) => p.tipo.includes('CLIENTE')).length;
-  const fornecedoresCount = pessoas.filter((p) => p.tipo.includes('FORNECEDOR')).length;
-  const transportadoresCount = pessoas.filter((p) => p.tipo === 'TRANSPORTADOR').length;
-  const limiteTotal = pessoas.reduce((acc, p) => acc + (p.limiteCredito || 0), 0);
+  const totalCount = (pessoas || []).length;
+  const clientesCount = (pessoas || []).filter((p) => String(p.tipo || '').includes('CLIENTE')).length;
+  const fornecedoresCount = (pessoas || []).filter((p) => String(p.tipo || '').includes('FORNECEDOR')).length;
+  const transportadoresCount = (pessoas || []).filter((p) => String(p.tipo || '') === 'TRANSPORTADOR').length;
+  const limiteTotal = (pessoas || []).reduce((acc, p) => acc + (p.limiteCredito || 0), 0);
 
   return (
     <div className="coliseu-page" style={{ height: 'calc(100vh - var(--header-height))', overflow: 'hidden', padding: 'var(--spacing-3) var(--spacing-4)', gap: 'var(--spacing-3)' }}>
@@ -1360,17 +1370,17 @@ export const PessoasPage: React.FC = () => {
                               fontWeight: 600,
                               padding: '1px 5px',
                               borderRadius: 'var(--radius-xs)',
-                              backgroundColor: p.tipo.includes('FORNECEDOR')
+                              backgroundColor: String(p.tipo || '').includes('FORNECEDOR')
                                 ? 'var(--status-warning-bg)'
                                 : p.tipo === 'TRANSPORTADOR'
                                 ? 'var(--domain-compras)'
                                 : 'var(--surface-2)',
-                              color: p.tipo.includes('FORNECEDOR')
+                              color: String(p.tipo || '').includes('FORNECEDOR')
                                 ? 'var(--status-warning)'
                                 : 'var(--text-primary)',
                             }}
                           >
-                            {p.tipo}
+                            {p.tipo || 'CLIENTE'}
                           </span>
                         </td>
                         <td className="text-mono" style={{ color: 'var(--text-link)', fontSize: '11px' }}>
