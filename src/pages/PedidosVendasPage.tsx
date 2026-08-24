@@ -72,7 +72,6 @@ export const PedidosVendasPage: React.FC = () => {
         const cloudList = await syncService.fetchCloudPedidos();
         if (cloudList && cloudList.length > 0) {
           const map = new Map<string, PedidoVendaItem>();
-          localList.forEach(p => map.set(p.id, p));
 
           cloudList.forEach((cp: any) => {
             const rawNum = cp.numero_pedido || cp.numeroPedido || '0';
@@ -129,6 +128,13 @@ export const PedidosVendasPage: React.FC = () => {
             };
 
             map.set(cp.id, itemFormatado);
+          });
+
+          // Incluir pedidos locais reais que ainda não foram gravados no banco
+          localList.forEach(p => {
+            if (!map.has(p.id) && !p.id.startsWith('PED-00')) {
+              map.set(p.id, p);
+            }
           });
 
           const unificada = Array.from(map.values());

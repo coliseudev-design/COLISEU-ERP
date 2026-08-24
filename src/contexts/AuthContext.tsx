@@ -18,12 +18,24 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // Inicialização síncrona do localStorage para NUNCA perder login com F5
+  const getSavedSession = () => {
+    try {
+      const raw = localStorage.getItem('coliseu_session');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const initialSession = getSavedSession();
+
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!initialSession?.funcionario);
   const [isLoading, setIsLoading] = useState(false);
-  const [funcionario, setFuncionario] = useState<Funcionario | null>(null);
-  const [permissoes, setPermissoes] = useState<GrupoAcessoPermissao[]>([]);
-  const [filiaisPermitidas, setFiliaisPermitidas] = useState<FuncionarioFilial[]>([]);
-  const [filialAtiva, setFilialAtiva] = useState<string | null>(null);
+  const [funcionario, setFuncionario] = useState<Funcionario | null>(() => initialSession?.funcionario || null);
+  const [permissoes, setPermissoes] = useState<GrupoAcessoPermissao[]>(() => initialSession?.permissoes || []);
+  const [filiaisPermitidas, setFiliaisPermitidas] = useState<FuncionarioFilial[]>(() => initialSession?.filiais_permitidas || []);
+  const [filialAtiva, setFilialAtiva] = useState<string | null>(() => initialSession?.filialAtiva || initialSession?.funcionario?.filial_padrao_id || null);
   const [loginError, setLoginError] = useState<string | null>(null);
 
   const login = useCallback(async (username: string, senha: string) => {
@@ -36,9 +48,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setFiliaisPermitidas(result.filiais_permitidas);
       setFilialAtiva(result.funcionario.filial_padrao_id || null);
       setIsAuthenticated(true);
-      // Save session to localStorage
+      
+      // Salva sessão completa no localStorage para persistir F5 e recarregamento de página
       localStorage.setItem('coliseu_session', JSON.stringify({
-        funcionarioId: result.funcionario.id,
+        funcionario: result.funcionario,
+        permissoes: result.permissoes,
+        filiais_permitidas: result.filiais_permitidas,
+        filialAtiva: result.funcionario.filial_padrao_id || null,
         timestamp: Date.now()
       }));
     } catch (err: any) {
