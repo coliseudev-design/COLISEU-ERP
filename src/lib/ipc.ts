@@ -240,6 +240,86 @@ export async function safeInvoke<T>(cmd: string, args?: Record<string, any>): Pr
       return item as unknown as T;
     }
 
+    case 'listar_funcionarios': {
+      return (store.funcionarios || [
+        {
+          id: 'func-admin-master',
+          codigo: '001',
+          nome: 'Administrador Coliseu',
+          apelido: 'Admin',
+          tipo_pessoa: 'FISICA',
+          tipo_funcionario: 'USUARIO',
+          cargo: 'Administrador do Sistema',
+          departamento: 'TI / Diretoria',
+          salario: 0,
+          username: 'ADMIN',
+          grupo_acesso_id: 'grp-admin',
+          grupo_acesso_nome: 'Administrador',
+          tem_acesso_sistema: 1,
+          status: 'ATIVO',
+          forcar_troca_senha: 0,
+          tentativas_login_falhas: 0,
+          comissao_percentual: 0,
+          comissao_tipo_calculo: 'PERCENTUAL_DIRETO',
+          empresa_id: 'emp-matriz-001',
+          filial_padrao_id: 'fil-matriz-001',
+          acesso_todas_empresas: 1,
+          uf: 'MS',
+        }
+      ]) as unknown as T;
+    }
+
+    case 'listar_grupos_acesso': {
+      return (store.grupos || [
+        {
+          id: 'grp-admin',
+          nome: 'Administrador',
+          descricao: 'Acesso total irrestrito a todos os módulos e filiais do ERP',
+          ativo: 1,
+          total_usuarios: 1,
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: 'grp-vendedor',
+          nome: 'Comercial & Vendas',
+          descricao: 'Emissão de pedidos, orçamentos, consulta de estoque e catálogo',
+          ativo: 1,
+          total_usuarios: 0,
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: 'grp-transporte',
+          nome: 'Transporte & Logística',
+          descricao: 'MDF-e, CT-e, CIOT, controle de frota e motoristas',
+          ativo: 1,
+          total_usuarios: 0,
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: 'grp-financeiro',
+          nome: 'Financeiro & Fiscal',
+          descricao: 'Contas a pagar/receber, conciliação, SPED e emissão de notas',
+          ativo: 1,
+          total_usuarios: 0,
+          created_at: new Date().toISOString(),
+        }
+      ]) as unknown as T;
+    }
+
+    case 'salvar_funcionario': {
+      const item = { ...args?.funcionario, id: args?.funcionario?.id || `func-${Date.now()}` };
+      store.funcionarios = [...(store.funcionarios || []).filter((f: any) => f.id !== item.id), item];
+      saveWebStore(store);
+      return item as unknown as T;
+    }
+
+    case 'salvar_grupo_acesso': {
+      const item = { ...args?.grupo, id: args?.grupo?.id || `grp-${Date.now()}` };
+      store.grupos = [...(store.grupos || []).filter((g: any) => g.id !== item.id), item];
+      saveWebStore(store);
+      return item as unknown as T;
+    }
+
     // Default fallback
     default:
       return [] as unknown as T;
