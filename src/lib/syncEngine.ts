@@ -272,12 +272,55 @@ class SyncEngine {
           url = `${CLOUD_API_URL}/api/pedidos`;
           method = 'POST';
         }
+      } else if (fullEvent.entity === 'pessoas') {
+        if (fullEvent.action === 'DELETE' && fullEvent.id) {
+          url = `${CLOUD_API_URL}/api/pessoas/${fullEvent.id}`;
+          method = 'DELETE';
+          body = undefined;
+        } else {
+          url = `${CLOUD_API_URL}/api/pessoas`;
+          method = 'POST';
+        }
       } else if (fullEvent.entity === 'produtos') {
-        if (fullEvent.action === 'STOCK_DELTA' && fullEvent.id) {
+        if (fullEvent.action === 'DELETE' && fullEvent.id) {
+          url = `${CLOUD_API_URL}/api/produtos/${fullEvent.id}`;
+          method = 'DELETE';
+          body = undefined;
+        } else if (fullEvent.action === 'STOCK_DELTA' && fullEvent.id) {
           url = `${CLOUD_API_URL}/api/produtos/${fullEvent.id}/estoque-delta`;
           method = 'POST';
         } else if (fullEvent.action === 'PRICE_UPDATE' && fullEvent.id) {
           url = `${CLOUD_API_URL}/api/produtos/${fullEvent.id}/preco`;
+          method = 'POST';
+        } else {
+          url = `${CLOUD_API_URL}/api/produtos`;
+          method = 'POST';
+        }
+      } else if (fullEvent.entity === 'ordens_servico') {
+        if (fullEvent.action === 'DELETE' && fullEvent.id) {
+          url = `${CLOUD_API_URL}/api/ordens_servico/${fullEvent.id}`;
+          method = 'DELETE';
+          body = undefined;
+        } else {
+          url = `${CLOUD_API_URL}/api/ordens_servico`;
+          method = 'POST';
+        }
+      } else if (fullEvent.entity === 'financeiro') {
+        if (fullEvent.action === 'DELETE' && fullEvent.id) {
+          url = `${CLOUD_API_URL}/api/financeiro/${fullEvent.id}`;
+          method = 'DELETE';
+          body = undefined;
+        } else {
+          url = `${CLOUD_API_URL}/api/financeiro`;
+          method = 'POST';
+        }
+      } else if (fullEvent.entity === 'transporte') {
+        if (fullEvent.action === 'DELETE' && fullEvent.id) {
+          url = `${CLOUD_API_URL}/api/transporte/${fullEvent.id}`;
+          method = 'DELETE';
+          body = undefined;
+        } else {
+          url = `${CLOUD_API_URL}/api/transporte`;
           method = 'POST';
         }
       }
