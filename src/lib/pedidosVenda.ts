@@ -1,4 +1,5 @@
 import { gerarChaveAcessoNFe } from './nfeChaveAcesso';
+import { syncService } from './syncService';
 
 export type StatusPedidoVenda =
   | 'ORCAMENTO'           // Proposta comercial em negociação
@@ -478,6 +479,10 @@ export function salvarPedidoVenda(pedido: PedidoVendaItem): PedidoVendaItem[] {
 
   localStorage.setItem(STORAGE_KEY_PEDIDOS_VENDA, JSON.stringify(atualizada));
   window.dispatchEvent(new Event('coliseu_pedidos_vendas_updated'));
+
+  // Disparar envio em background para a VPS (PostgreSQL Central)
+  syncService.syncPedido(pedido).catch((err) => console.warn('[Sync] Falha no push assíncrono:', err));
+
   return atualizada;
 }
 

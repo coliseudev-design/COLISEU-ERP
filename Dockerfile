@@ -5,7 +5,6 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Garantir ambiente de build para instalar devDependencies (tsc, vite, etc.)
 ENV NODE_ENV=development
 
 # Copiar manifestos de dependências para aproveitar cache do Docker
@@ -21,25 +20,30 @@ COPY . .
 RUN npm run build
 
 # ==========================================
-# Estágio 2: Servidor Web Nginx para Produção
+# Estágio 2: Servidor Node.js Cloud API & SPA
 # ==========================================
-FROM nginx:1.27-alpine AS runner
+FROM node:20-alpine AS runner
 
-# Remover configuração padrão do Nginx
-RUN rm -rf /etc/nginx/conf.d/default.conf /usr/share/nginx/html/*
+WORKDIR /app
 
-# Copiar configuração customizada otimizada para SPA
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+ENV NODE_ENV=production
+
+# Copiar manifestos de dependências de produção
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --prefer-offline --no-audit
+
+# Copiar script do servidor de API e sincronização
+COPY server.js ./
 
 # Copiar os arquivos estáticos compilados do estágio anterior
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /app/dist ./dist
 
 # Expor portas HTTP
 EXPOSE 80 3000
 
 # Healthcheck do container
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost/ || exit 1
+  CMD wget --quiet --tries=1 --spider http://localhost:80/api/health || exit 1
 
-# Iniciar Nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Iniciar Servidor Node.js
+CMD ["node", "server.js"]

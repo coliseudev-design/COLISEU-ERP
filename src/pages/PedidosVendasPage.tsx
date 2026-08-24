@@ -29,6 +29,7 @@ import {
   podeFaturarPedidoNFCe,
   podeEmitirAcobertamento,
 } from '../lib/pedidosVenda';
+import { syncService } from '../lib/syncService';
 import { ModalEmissaoPedidoVenda } from '../components/vendas/ModalEmissaoPedidoVenda';
 import { ModalImpressaoPedidoA4 } from '../components/vendas/ModalImpressaoPedidoA4';
 import { ModalFaturamentoNFe } from '../components/vendas/ModalFaturamentoNFe';
@@ -59,7 +60,85 @@ export const PedidosVendasPage: React.FC = () => {
       setPedidos(getPedidosVenda());
     };
     window.addEventListener('coliseu_pedidos_vendas_updated', handleUpdate);
-    return () => window.removeEventListener('coliseu_pedidos_vendas_updated', handleUpdate);
+
+    // Sincronização em background:
+    const runSync = async () => {
+      try {
+        const localList = getPedidosVenda();
+        // 1. Enviar lote de pedidos locais para a VPS (PostgreSQL Central)
+        await syncService.syncBatchPedidos(localList);
+
+        // 2. Buscar pedidos da Nuvem (PostgreSQL Central)
+        const cloudList = await syncService.fetchCloudPedidos();
+        if (cloudList && cloudList.length > 0) {
+          const map = new Map<string, PedidoVendaItem>();
+          localList.forEach(p => map.set(p.id, p));
+
+          cloudList.forEach((cp: any) => {
+            if (!map.has(cp.id)) {
+              map.set(cp.id, {
+                id: cp.id,
+                numeroPedido: String(cp.numero_pedido || '0'),
+                tipoMovimento: 'SAIDA',
+                status: cp.status || 'APROVADO',
+                dataEmissao: cp.data_emissao ? new Date(cp.data_emissao).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
+                filialDepto: cp.filial_id || 'MATRIZ',
+                clienteId: cp.cliente_id || '',
+                clienteCodigo: '1',
+                clienteNome: cp.cliente_nome,
+                clienteCnpjCpf: cp.cliente_cpf_cnpj || '',
+                clienteCidade: cp.cliente_cidade || 'DOURADOS',
+                clienteUf: cp.cliente_uf || 'MS',
+                clienteEndereco: cp.cliente_endereco || 'CENTRO',
+                clienteBairro: cp.cliente_bairro || 'CENTRO',
+                clienteTelefone: '',
+                naturezaOperacao: {
+                  cfop: '5102',
+                  descricao: cp.natureza_operacao || '5102 - VENDA DE MERCADORIAS',
+                  tipo: 'SAIDA',
+                  geraFinanceiro: true,
+                  movimentaEstoque: true,
+                  destinacaoPadrao: 'ESTADUAL',
+                },
+                vendedorId: 'VEND-1',
+                vendedorNome: cp.vendedor_nome || 'VENDEDOR',
+                tabelaPrecos: 'TABELA PADRÃO',
+                tipoFrete: 'SEM_FRETE',
+                valorFrete: 0,
+                pesoLiquidoKg: 0,
+                pesoBrutoKg: 0,
+                quantidadeVolumes: 0,
+                itens: [],
+                totalProdutos: parseFloat(cp.valor_total || '0'),
+                totalDescontoGlobal: 0,
+                totalAcrescimos: 0,
+                totalIpi: 0,
+                totalIcms: 0,
+                totalIcmsSt: 0,
+                totalServicos: 0,
+                valorTotalFinal: parseFloat(cp.valor_total || '0'),
+                formaPagamentoNome: 'A VISTA / A PRAZO',
+                parcelas: [],
+              });
+            }
+          });
+
+          const unificada = Array.from(map.values());
+          localStorage.setItem('coliseu_pedidos_vendas_data', JSON.stringify(unificada));
+          setPedidos(unificada);
+        }
+      } catch (err) {
+        console.warn('[Pedidos] Falha no ciclo de sincronização:', err);
+      }
+    };
+
+    runSync();
+    const interval = setInterval(runSync, 10000); // Polling a cada 10s
+
+    return () => {
+      window.removeEventListener('coliseu_pedidos_vendas_updated', handleUpdate);
+      clearInterval(interval);
+    };
   }, []);
 
   const handleNovoPedido = () => {
