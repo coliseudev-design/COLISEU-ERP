@@ -1,15 +1,18 @@
-﻿# ==========================================
+# ==========================================
 # Estágio 1: Build da Aplicação Frontend (Vite + React + TS)
 # ==========================================
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Garantir ambiente de build para instalar devDependencies (tsc, vite, etc.)
+ENV NODE_ENV=development
+
 # Copiar manifestos de dependências para aproveitar cache do Docker
 COPY package.json package-lock.json ./
 
-# Instalar dependências de build
-RUN npm ci --prefer-offline --no-audit
+# Instalar TODAS as dependências necessárias para o build
+RUN npm ci --include=dev --prefer-offline --no-audit
 
 # Copiar o restante do código fonte
 COPY . .
