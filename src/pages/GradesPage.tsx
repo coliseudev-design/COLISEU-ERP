@@ -30,7 +30,7 @@ export const GradesPage: React.FC = () => {
     try {
       const list = await gradeService.listarGrades('emp1');
       setGrades(list);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
     }
   };

@@ -22,7 +22,7 @@ import {
   getMdfeConfig,
   salvarMdfeConfig,
 } from '../lib/mdfeConfig';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke as invoke } from "../lib/ipc";
 import { escolherPasta, escolherArquivoImagem, escolherArquivoCertificado } from '../lib/fileDialogHelper';
 
 export const GerenciamentoMDFePage: React.FC = () => {

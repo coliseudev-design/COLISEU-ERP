@@ -22,7 +22,7 @@ export const MotoristasPage: React.FC = () => {
     try {
       const lista = await transporteService.listarMotoristas('emp_matriz_01');
       setMotoristas(lista);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
     }
   };

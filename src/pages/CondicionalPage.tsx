@@ -57,7 +57,7 @@ export const CondicionalPage: React.FC = () => {
     try {
       const list = await condicionalService.listarCondicionaisPendentes('fil1');
       setCondicionais(list);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
     }
   };

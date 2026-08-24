@@ -55,7 +55,7 @@ export const CteEmissaoPage: React.FC = () => {
       setVeiculos(v);
       setMotoristas(m);
       setRotas(r);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
     }
   };

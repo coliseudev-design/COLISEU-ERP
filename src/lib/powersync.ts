@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { safeInvoke as invoke } from "./ipc";
 import { useState, useEffect } from "react";
 
 export type ConnectionState = "Online" | "Syncing" | "Offline" | "Error";

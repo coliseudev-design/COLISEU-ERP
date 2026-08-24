@@ -39,7 +39,7 @@ export const CaixasPage: React.FC = () => {
   useEffect(() => {
     try {
       localStorage.setItem('coliseu_caixas', JSON.stringify(caixas));
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
     }
   }, [caixas]);

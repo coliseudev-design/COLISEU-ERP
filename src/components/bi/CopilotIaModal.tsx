@@ -36,7 +36,7 @@ export const CopilotIaModal: React.FC<CopilotIaModalProps> = ({
 
       const res = await reportsService.analisarBiComIa(resumoJson, promptToSend);
       setResposta(res);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao consultar IA executiva:', err);
       setResposta('Erro de comunicação com o motor de IA. Verifique as configurações de provedor LLM.');
     } finally {

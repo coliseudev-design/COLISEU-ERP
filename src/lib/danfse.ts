@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke as invoke } from "./ipc";
 
 export interface DanfsePdfResult {
   pdf_path: string;
@@ -17,7 +17,7 @@ export async function gerarDanfsePdf(dpsId: string, outputDir?: string): Promise
 export async function abrirDanfsePdf(pdfPath: string): Promise<void> {
   try {
     await invoke('abrir_arquivo_pdf', { pdfPath });
-  } catch (err) {
+  } catch (err: any) {
     try {
       const { open } = await import('@tauri-apps/plugin-shell');
       await open(pdfPath);

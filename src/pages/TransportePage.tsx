@@ -114,7 +114,7 @@ export const TransportePage: React.FC = () => {
       setKpis(kpiData);
       setEvolucaoFrete(evolData);
       setRankingRotas(rankData);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao carregar dados reais de transporte:', err);
     } finally {
       setIsLoading(false);

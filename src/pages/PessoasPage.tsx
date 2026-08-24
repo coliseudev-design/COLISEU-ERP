@@ -770,7 +770,7 @@ export const PessoasPage: React.FC = () => {
       } else {
         showToast('⚠️ CNPJ não localizado ou serviço da Receita temporariamente instável.');
       }
-    } catch (err) {
+    } catch (err: any) {
       showToast('❌ Falha ao conectar ao serviço de consulta da Receita Federal.');
     } finally {
       setIsConsultingReceita(false);

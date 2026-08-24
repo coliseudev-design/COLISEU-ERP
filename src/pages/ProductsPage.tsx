@@ -213,7 +213,7 @@ export const ProductsPage: React.FC = () => {
       const updatedCustom = [newProd, ...customProds.filter((p: any) => String(p.sku) !== String(newProd.sku))];
       localStorage.setItem('coliseu_custom_produtos', JSON.stringify(updatedCustom));
       window.dispatchEvent(new Event('coliseu_produtos_updated'));
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
     }
 

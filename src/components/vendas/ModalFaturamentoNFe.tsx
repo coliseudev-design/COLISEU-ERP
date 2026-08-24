@@ -28,7 +28,7 @@ import { gerarXmlNFe } from '../../lib/nfeXmlGenerator';
 import { gerarChaveAcessoNFe } from '../../lib/nfeChaveAcesso';
 import { getNfeConfig, obterProximoNumeroNFe, incrementarNumeroNFe } from '../../lib/nfeConfig';
 import { salvarArquivoComDialogo, obterXmlRealDoDisco } from '../../lib/fileDialogHelper';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke as invoke } from "../../lib/ipc";
 
 interface ModalFaturamentoNFeProps {
   isOpen: boolean;

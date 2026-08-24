@@ -5,7 +5,7 @@ import { Truck, Send, X, MapPin, User, Package, ShieldCheck, Search, CheckSquare
 import { DocumentoFiscalItem, salvarDocumentoFiscal, getDocumentosFiscais } from '../../lib/dfe';
 import { getCertificadoConfig } from '../../lib/certificadoA1';
 import { VeiculoItem, MotoristaItem, CteItem, TransporteService, NfeDocumentoItem } from '../../lib/transporte';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke as invoke } from "../../lib/ipc";
 
 interface ModalEmissaoMDFeProps {
   isOpen: boolean;
@@ -100,7 +100,7 @@ export const ModalEmissaoMDFe: React.FC<ModalEmissaoMDFeProps> = ({
         if (chavesSelecionadas.length === 0 && docsUnificados.length === 1) {
           setChavesSelecionadas([docsUnificados[0].chave_acesso]);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Erro ao carregar documentos fiscais:', err);
       } finally {
         setIsLoadingDocs(false);

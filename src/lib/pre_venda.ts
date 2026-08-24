@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { safeInvoke as invoke } from "./ipc";
 
 export interface ItemComandaInput {
   produto_id: string;

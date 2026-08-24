@@ -5,7 +5,7 @@ import { Zap, Send, X, CheckCircle2, Search, MapPin, Truck, User, FileText } fro
 import { CteItem, VeiculoItem, MotoristaItem, TransporteService, NfeDocumentoItem } from '../../lib/transporte';
 import { getCertificadoConfig } from '../../lib/certificadoA1';
 import { getCteConfig } from '../../lib/cteConfig';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke as invoke } from "../../lib/ipc";
 
 interface ModalEmissaoRapidaCTeProps {
   isOpen: boolean;
@@ -61,7 +61,7 @@ export const ModalEmissaoRapidaCTe: React.FC<ModalEmissaoRapidaCTeProps> = ({
         if (nfes.length > 0 && !nfeSelecionadaChave) {
           setNfeSelecionadaChave(nfes[0].chave_acesso);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Erro ao carregar NF-es para CT-e rápido:', err);
       } finally {
         setIsLoadingDocs(false);

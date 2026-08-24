@@ -50,7 +50,7 @@ export const ContasBancariasPage: React.FC = () => {
   useEffect(() => {
     try {
       localStorage.setItem('coliseu_contas_bancarias', JSON.stringify(contas));
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
     }
   }, [contas]);

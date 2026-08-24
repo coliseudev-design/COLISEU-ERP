@@ -33,7 +33,7 @@ import {
   AmbienteSefaz,
 } from '../lib/nfeConfig';
 import { getPedidosVenda, cancelarNotaFiscalPedido } from '../lib/pedidosVenda';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke as invoke } from "../lib/ipc";
 import {
   escolherPasta,
   escolherArquivoImagem,
@@ -311,7 +311,7 @@ export const GerenciamentoNFePage: React.FC = () => {
             logRetorno(`🔓 Pedido Nº ${p.numeroPedido} liberado e destravado para novo faturamento após cancelamento da NF-e.`);
           }
         });
-      } catch (err) {
+      } catch (err: any) {
         console.warn('Erro ao atualizar pedidos vinculados ao cancelamento:', err);
       }
     };

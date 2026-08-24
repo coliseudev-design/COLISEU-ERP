@@ -24,7 +24,7 @@ import {
 } from '../../lib/pedidosVenda';
 import { getNfceConfig, obterProximoNumeroNFCe, incrementarNumeroNFCe } from '../../lib/nfceConfig';
 import { salvarArquivoComDialogo } from '../../lib/fileDialogHelper';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke as invoke } from "../../lib/ipc";
 
 interface ModalFaturamentoNFCeProps {
   isOpen: boolean;

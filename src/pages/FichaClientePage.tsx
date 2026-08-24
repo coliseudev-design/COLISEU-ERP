@@ -21,7 +21,7 @@ export const FichaClientePage: React.FC = () => {
     try {
       const list = await condicionalService.consultarFichaFinanceira(clienteId);
       setMovimentos(list);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
     } finally {
       setLoading(false);

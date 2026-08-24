@@ -108,7 +108,7 @@ export const ModalEmissaoMDFe: React.FC<ModalEmissaoMDFeProps> = ({
         if (chavesSelecionadas.length === 0 && docsUnificados.length === 1) {
           setChavesSelecionadas([docsUnificados[0].chave_acesso]);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Erro ao carregar notas fiscais:', err);
       } finally {
         setIsLoadingDocs(false);

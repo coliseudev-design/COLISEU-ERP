@@ -17,7 +17,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { OperacaoTransporteItem, transporteService } from '../../lib/transporte';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke as invoke } from "../../lib/ipc";
 import { getCertificadoConfig } from '../../lib/certificadoA1';
 import { getMdfeConfig } from '../../lib/mdfeConfig';
 

@@ -34,7 +34,7 @@ import {
 import { getCteConfig } from '../../lib/cteConfig';
 import { getCertificadoConfig } from '../../lib/certificadoA1';
 import { PisoMinimoCalculator } from './PisoMinimoCalculator';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke as invoke } from "../../lib/ipc";
 
 interface ModalEmissaoCTeProps {
   isOpen: boolean;
@@ -167,7 +167,7 @@ export const ModalEmissaoCTe: React.FC<ModalEmissaoCTeProps> = ({
         if (nfes.length > 0 && chavesSelecionadas.length === 0) {
           setChavesSelecionadas([nfes[0].chave_acesso]);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Erro ao carregar NF-es para CT-e:', err);
       } finally {
         setIsLoadingDocs(false);

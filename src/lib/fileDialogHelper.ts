@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke as invoke } from "./ipc";
 
 /**
  * Abre a janela nativa do Windows Explorer para o usuário selecionar uma pasta
@@ -9,7 +9,7 @@ export async function escolherPasta(caminhoAtual?: string): Promise<string | nul
     if (res) {
       return res;
     }
-  } catch (err) {
+  } catch (err: any) {
     console.warn('Tauri dialog invocado via web ou não inicializado:', err);
   }
 
@@ -27,7 +27,7 @@ export async function escolherArquivoImagem(caminhoAtual?: string): Promise<stri
     if (res) {
       return res;
     }
-  } catch (err) {
+  } catch (err: any) {
     console.warn('Tauri dialog invocado via web ou não inicializado:', err);
   }
 
@@ -45,7 +45,7 @@ export async function escolherArquivoCertificado(caminhoAtual?: string): Promise
     if (res) {
       return res;
     }
-  } catch (err) {
+  } catch (err: any) {
     console.warn('Tauri dialog invocado via web ou não inicializado:', err);
   }
 
@@ -90,7 +90,7 @@ export async function salvarArquivoComDialogo(
       extensao,
     });
     if (res) return res;
-  } catch (err) {
+  } catch (err: any) {
     console.warn('Falha no diálogo nativo de salvar:', err);
   }
 
@@ -120,7 +120,7 @@ export async function obterXmlRealDoDisco(chave: string): Promise<string | null>
     if (res && (res.includes('<Signature') || res.includes('<NFe'))) {
       return res;
     }
-  } catch (err) {
+  } catch (err: any) {
     console.warn('XML real ainda não encontrado no disco:', err);
   }
   return null;

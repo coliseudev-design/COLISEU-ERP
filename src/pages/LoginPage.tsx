@@ -15,7 +15,7 @@ export const LoginPage: React.FC = () => {
     if (!username || !senha) return;
     try {
       await login(username, senha);
-    } catch (err) {
+    } catch (err: any) {
       // Error is handled in context and exposed via loginError
     }
   }, [login, username, senha]);

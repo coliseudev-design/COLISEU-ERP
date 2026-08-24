@@ -22,7 +22,7 @@ import {
   salvarNfceConfig,
 } from '../lib/nfceConfig';
 import { getPedidosVenda, cancelarNotaFiscalPedido } from '../lib/pedidosVenda';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke as invoke } from "../lib/ipc";
 import { escolherPasta, escolherArquivoImagem, escolherArquivoCertificado } from '../lib/fileDialogHelper';
 
 export const GerenciamentoNFCePage: React.FC = () => {
@@ -292,7 +292,7 @@ export const GerenciamentoNFCePage: React.FC = () => {
             logRetorno(`🔓 Pedido Nº ${p.numeroPedido} liberado e destravado após cancelamento do Cupom NFC-e.`);
           }
         });
-      } catch (err) {
+      } catch (err: any) {
         console.warn('Erro ao destravar pedidos vinculados ao cancelamento NFC-e:', err);
       }
     };

@@ -22,7 +22,7 @@ export const FrotaVeiculosPage: React.FC = () => {
     try {
       const lista = await transporteService.listarVeiculos('emp_matriz_01');
       setVeiculos(lista);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
     }
   };

@@ -61,7 +61,7 @@ export const PDVPage: React.FC = () => {
       } else {
         setProducts(MOCK_PRODUCTS);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Erro ao listar produtos via IPC (usando mock):', err);
       setProducts(MOCK_PRODUCTS);
     }

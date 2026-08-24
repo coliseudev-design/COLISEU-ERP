@@ -55,7 +55,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       const filialId = filial === 'todas' ? 'todas' : filial === 'matriz' ? 'fil_matriz_01' : 'fil_dourados_02';
       const data = await reportsService.gerarBiExecutivo(dataInicio, dataFim, filialId);
       setBiData(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao gerar BI Executivo 360:', err);
     } finally {
       setIsLoading(false);

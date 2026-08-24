@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { CteConfiguracaoCompleta, getCteConfig, salvarCteConfig } from '../lib/cteConfig';
 import { escolherPasta, escolherArquivoImagem, escolherArquivoCertificado } from '../lib/fileDialogHelper';
-import { invoke } from '@tauri-apps/api/core';
+import { safeInvoke as invoke } from "../lib/ipc";
 
 export const CteGerenciamentoPage: React.FC = () => {
   const [config, setConfig] = useState<CteConfiguracaoCompleta>(getCteConfig);
