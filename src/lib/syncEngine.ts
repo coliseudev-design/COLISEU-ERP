@@ -97,9 +97,87 @@ class SyncEngine {
 
     // 2. Despacha eventos específicos por entidade para atualizar componentes React
     switch (event.entity) {
-      case 'pedidos_venda':
+      case 'pedidos_venda': {
+        try {
+          const STORAGE_KEY = 'coliseu_pedidos_venda_list';
+          const raw = localStorage.getItem(STORAGE_KEY);
+          let currentList: any[] = raw ? JSON.parse(raw) : [];
+          if (!Array.isArray(currentList)) currentList = [];
+
+          if (event.action === 'UPSERT' && event.payload) {
+            const p = event.payload;
+            const rawNum = p.numero_pedido || p.numeroPedido || '0';
+            const rawCliente = p.cliente_nome || p.clienteNome || 'CLIENTE NÃO INFORMADO';
+            const rawTotal = parseFloat(p.valor_total || p.valorTotalFinal || '0');
+            const rawData = p.data_emissao || p.dataEmissao || new Date().toLocaleDateString('pt-BR');
+            const dataFmt = typeof rawData === 'string' && rawData.includes('-') ? new Date(rawData).toLocaleDateString('pt-BR') : String(rawData);
+
+            const formatado = {
+              id: p.id,
+              numeroPedido: String(rawNum),
+              tipoMovimento: p.tipoMovimento || 'SAIDA',
+              status: p.status || 'APROVADO',
+              dataEmissao: dataFmt,
+              filialDepto: p.filial_id || p.filialDepto || 'MATRIZ - DOURADOS/MS',
+              clienteId: p.cliente_id || p.clienteId || '',
+              clienteCodigo: p.clienteCodigo || '1',
+              clienteNome: rawCliente,
+              clienteCnpjCpf: p.cliente_cpf_cnpj || p.clienteCnpjCpf || '',
+              clienteCidade: p.cliente_cidade || p.clienteCidade || 'DOURADOS',
+              clienteUf: p.cliente_uf || p.clienteUf || 'MS',
+              clienteEndereco: p.cliente_endereco || p.clienteEndereco || 'CENTRO',
+              clienteBairro: p.cliente_bairro || p.clienteBairro || 'CENTRO',
+              clienteTelefone: p.clienteTelefone || '',
+              naturezaOperacao: typeof p.naturezaOperacao === 'object' && p.naturezaOperacao !== null
+                ? p.naturezaOperacao
+                : {
+                    cfop: '5102',
+                    descricao: p.natureza_operacao || '5102 - VENDA DE MERCADORIAS',
+                    tipo: 'SAIDA',
+                    geraFinanceiro: true,
+                    movimentaEstoque: true,
+                    destinacaoPadrao: 'ESTADUAL',
+                  },
+              vendedorId: p.vendedorId || 'VEND-1',
+              vendedorNome: p.vendedor_nome || p.vendedorNome || 'CARLOS SILVA (INTERNO)',
+              tabelaPrecos: p.tabelaPrecos || 'TABELA PADRÃO',
+              tipoFrete: p.tipoFrete || 'CIF',
+              valorFrete: p.valorFrete || 0,
+              pesoLiquidoKg: p.pesoLiquidoKg || 0,
+              pesoBrutoKg: p.pesoBrutoKg || 0,
+              quantidadeVolumes: p.quantidadeVolumes || 1,
+              itens: Array.isArray(p.itens) ? p.itens : [],
+              totalProdutos: rawTotal,
+              totalDescontoGlobal: 0,
+              totalAcrescimos: 0,
+              totalIpi: 0,
+              totalIcms: 0,
+              totalIcmsSt: 0,
+              totalServicos: 0,
+              valorTotalFinal: rawTotal,
+              formaPagamentoNome: p.formaPagamentoNome || 'A VISTA / A PRAZO',
+              parcelas: Array.isArray(p.parcelas) ? p.parcelas : [],
+            };
+
+            const idx = currentList.findIndex((item) => item.id === p.id);
+            if (idx >= 0) {
+              currentList[idx] = { ...currentList[idx], ...formatado };
+            } else {
+              currentList = [formatado, ...currentList];
+            }
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(currentList));
+          } else if (event.action === 'DELETE' && event.id) {
+            currentList = currentList.filter((item) => item.id !== event.id);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(currentList));
+          } else if (event.action === 'RESET') {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+          }
+        } catch (e) {
+          console.warn('[SyncEngine] Erro ao sincronizar cache local de pedidos:', e);
+        }
         window.dispatchEvent(new CustomEvent('coliseu_pedidos_vendas_updated', { detail: event }));
         break;
+      }
       case 'produtos':
         window.dispatchEvent(new CustomEvent('coliseu_produtos_updated', { detail: event }));
         break;
