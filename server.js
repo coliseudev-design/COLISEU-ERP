@@ -36,8 +36,17 @@ let inMemoryPedidos = [];
 
 // ==================== ROTAS DE API ====================
 
-// Healthcheck com diagnóstico do PostgreSQL
-app.get('/api/health', async (req, res) => {
+// Healthcheck ultra-rápido para Docker / Coolify
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'online',
+    system: 'Coliseu ERP - Cloud Concentrator',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Diagnóstico do PostgreSQL em rota separada
+app.get('/api/health/db', async (req, res) => {
   let dbStatus = 'disconnected';
   let totalDbPedidos = 0;
   try {
