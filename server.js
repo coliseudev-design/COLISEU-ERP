@@ -15,27 +15,45 @@ app.use(cors());
 app.use(express.json({ limit: '15mb' }));
 
 // Configuração do Pool PostgreSQL
-const pool = new Pool({
-  host: process.env.VITE_DB_HOST || process.env.DB_HOST || 'postgres-central',
-  port: parseInt(process.env.VITE_DB_PORT || process.env.DB_PORT || '5432', 10),
-  user: process.env.POSTGRES_USER || process.env.DB_USER || 'coliseu_admin',
-  password: process.env.POSTGRES_PASSWORD || process.env.DB_PASSWORD,
-  database: process.env.POSTGRES_DB || process.env.DB_NAME || 'coliseu_erp',
-  max: 10,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 4000,
-});
+const connectionString = process.env.DATABASE_URL || process.env.DB_URL;
+const pool = new Pool(
+  connectionString
+    ? { connectionString, max: 10, idleTimeoutMillis: 30000, connectionTimeoutMillis: 4000 }
+    : {
+        host: process.env.VITE_DB_HOST || process.env.DB_HOST || 'postgres-central',
+        port: parseInt(process.env.VITE_DB_PORT || process.env.DB_PORT || '5432', 10),
+        user: process.env.POSTGRES_USER || process.env.DB_USER || 'coliseu_admin',
+        password: process.env.POSTGRES_PASSWORD || process.env.DB_PASSWORD,
+        database: process.env.POSTGRES_DB || process.env.DB_NAME || 'coliseu_erp',
+        max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 4000,
+      }
+);
 
 // Cache em memória para fallback se o banco oscilar
 let inMemoryPedidos = [];
 
 // ==================== ROTAS DE API ====================
 
-// Healthcheck
-app.get('/api/health', (req, res) => {
+// Healthcheck com diagnóstico do PostgreSQL
+app.get('/api/health', async (req, res) => {
+  let dbStatus = 'disconnected';
+  let totalDbPedidos = 0;
+  try {
+    const test = await pool.query('SELECT count(*)::int as count FROM pedidos_venda');
+    dbStatus = 'connected';
+    totalDbPedidos = test.rows[0]?.count || 0;
+  } catch (e) {
+    dbStatus = `error: ${e.message}`;
+  }
+
   res.json({
     status: 'online',
     system: 'Coliseu ERP - Cloud Concentrator',
+    database: dbStatus,
+    total_db_pedidos: totalDbPedidos,
+    in_memory_pedidos: inMemoryPedidos.length,
     timestamp: new Date().toISOString(),
   });
 });
