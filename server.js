@@ -56,6 +56,16 @@ app.get('/api/health', async (req, res) => {
     in_memory_pedidos: inMemoryPedidos.length,
     timestamp: new Date().toISOString(),
   });
+// Reset / Limpar todos os pedidos da nuvem
+app.all('/api/pedidos/reset', async (req, res) => {
+  try {
+    await pool.query('TRUNCATE TABLE pedidos_venda_itens, pedidos_venda CASCADE;');
+    inMemoryPedidos = [];
+    return res.json({ success: true, message: 'BANCO DE VENDAS DA NUVEM LIMPO COM SUCESSO!' });
+  } catch (err) {
+    inMemoryPedidos = [];
+    return res.json({ success: true, message: 'Memória limpa, erro no banco: ' + err.message });
+  }
 });
 
 // Listar Pedidos de Venda (Postgres)
