@@ -174,6 +174,23 @@ app.get('/api/pedidos', async (req, res) => {
   }
 });
 
+function parseDateForPg(dt) {
+  if (!dt) return new Date().toISOString();
+  if (typeof dt === 'string' && dt.includes('/')) {
+    const parts = dt.split('/');
+    if (parts.length === 3) {
+      const [d, m, y] = parts;
+      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T12:00:00.000Z`;
+    }
+  }
+  try {
+    const parsed = new Date(dt);
+    return isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+  } catch {
+    return new Date().toISOString();
+  }
+}
+
 // Salvar / Atualizar Pedido Individual (Com Broadcast Imediato)
 app.post('/api/pedidos', async (req, res) => {
   const p = req.body;
@@ -184,6 +201,7 @@ app.post('/api/pedidos', async (req, res) => {
   const numeroLimpo = parseInt(String(p.numeroPedido || p.numero_pedido || '0').replace(/\D/g, ''), 10) || 0;
   const valorFinal = parseFloat(p.valorTotalFinal || p.valor_total || '0');
   const qtdItens = Array.isArray(p.itens) ? p.itens.length : (p.quantidade_itens || 1);
+  const dataEmissaoPg = parseDateForPg(p.data_emissao || p.dataEmissao);
 
   try {
     const result = await pool.query(
@@ -209,7 +227,7 @@ app.post('/api/pedidos', async (req, res) => {
         p.id,
         p.filial_id || p.filialDepto || 'fil-matriz-001',
         numeroLimpo,
-        p.data_emissao || p.dataEmissao || new Date().toISOString(),
+        dataEmissaoPg,
         p.cliente_id || p.clienteId || null,
         p.cliente_nome || p.clienteNome || 'CLIENTE NÃO INFORMADO',
         p.cliente_cpf_cnpj || p.clienteCnpjCpf || null,
