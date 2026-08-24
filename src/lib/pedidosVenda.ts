@@ -517,6 +517,10 @@ export function excluirPedidoVenda(pedidoId: string): PedidoVendaItem[] {
   const atualizada = lista.filter((item) => item.id !== pedidoId);
   localStorage.setItem(STORAGE_KEY_PEDIDOS_VENDA, JSON.stringify(atualizada));
   window.dispatchEvent(new Event('coliseu_pedidos_vendas_updated'));
+
+  // Notificar imediatamente a Nuvem (PostgreSQL Central) para excluir
+  syncService.deletePedido(pedidoId).catch((err) => console.warn('[Sync] Falha ao excluir na nuvem:', err));
+
   return atualizada;
 }
 

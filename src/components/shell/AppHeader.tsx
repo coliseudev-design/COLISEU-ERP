@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bell, HelpCircle, Search, Sun, Moon } from 'lucide-react';
 import { useTheme } from '../../lib/theme';
+import { syncEngine } from '../../lib/syncEngine';
 
 interface AppHeaderProps {
   onOpenCommandBar?: () => void;
@@ -45,6 +46,23 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   const [showNotifications, setShowNotifications] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
   const { theme, toggleTheme } = useTheme();
+  const [syncState, setSyncState] = useState<{
+    status: 'CONNECTED' | 'RECONNECTING' | 'OFFLINE';
+    activeTerminals: number;
+    pendingCount: number;
+    lastSyncedAt: string;
+  }>({
+    status: 'CONNECTED',
+    activeTerminals: 1,
+    pendingCount: 0,
+    lastSyncedAt: '',
+  });
+
+  useEffect(() => {
+    return syncEngine.subscribeStatus((st) => {
+      setSyncState(st);
+    });
+  }, []);
 
   const displayTitle = activeModuleTitle || TAB_TITLES[activeTab] || 'Coliseu ERP';
 
@@ -111,12 +129,13 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               display: 'inline-flex',
               alignItems: 'center',
               gap: '4px',
-              fontSize: 'var(--font-size-2xs)',
-              color: 'var(--status-success)',
-              backgroundColor: 'var(--status-success-bg)',
-              padding: '1px 6px',
+              fontSize: '10px',
+              fontWeight: 600,
+              color: syncState.status === 'CONNECTED' ? '#10b981' : syncState.status === 'RECONNECTING' ? '#f59e0b' : '#ef4444',
+              backgroundColor: syncState.status === 'CONNECTED' ? 'rgba(16, 185, 129, 0.1)' : syncState.status === 'RECONNECTING' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+              padding: '1px 7px',
               borderRadius: 'var(--radius-xs)',
-              border: '1px solid var(--status-success-border)',
+              border: `1px solid ${syncState.status === 'CONNECTED' ? 'rgba(16, 185, 129, 0.25)' : syncState.status === 'RECONNECTING' ? 'rgba(245, 158, 11, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`,
             }}
           >
             <span
@@ -124,10 +143,14 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 width: '5px',
                 height: '5px',
                 borderRadius: '50%',
-                backgroundColor: 'var(--status-success)',
+                backgroundColor: syncState.status === 'CONNECTED' ? '#10b981' : syncState.status === 'RECONNECTING' ? '#f59e0b' : '#ef4444',
               }}
             />
-            Sincronizado
+            {syncState.status === 'CONNECTED'
+              ? `Omni-Sync Ativo (${syncState.activeTerminals} online)`
+              : syncState.status === 'RECONNECTING'
+              ? 'Reconectando...'
+              : `Offline (${syncState.pendingCount} pendente)`}
           </span>
 
           <span

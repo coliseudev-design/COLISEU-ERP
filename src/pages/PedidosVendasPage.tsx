@@ -191,92 +191,7 @@ export const PedidosVendasPage: React.FC = () => {
     setIsModalFaturamentoNFCeOpen(true);
   };
 
-  const [isSyncing, setIsSyncing] = useState(false);
 
-  const handleForcarSincronizacao = async () => {
-    setIsSyncing(true);
-    try {
-      const localList = getPedidosVenda();
-      await syncService.syncBatchPedidos(localList);
-      const cloudList = await syncService.fetchCloudPedidos();
-      if (cloudList && cloudList.length > 0) {
-        const map = new Map<string, PedidoVendaItem>();
-        cloudList.forEach((cp: any) => {
-          const rawNum = cp.numero_pedido || cp.numeroPedido || '0';
-          const rawCliente = cp.cliente_nome || cp.clienteNome || 'CLIENTE NÃO INFORMADO';
-          const rawTotal = parseFloat(cp.valor_total || cp.valorTotalFinal || '0');
-          const rawData = cp.data_emissao || cp.dataEmissao || new Date().toLocaleDateString('pt-BR');
-          const dataFmt = typeof rawData === 'string' && rawData.includes('-') ? new Date(rawData).toLocaleDateString('pt-BR') : String(rawData);
-
-          const itemFormatado: PedidoVendaItem = {
-            id: cp.id,
-            numeroPedido: String(rawNum),
-            tipoMovimento: cp.tipoMovimento || 'SAIDA',
-            status: cp.status || 'APROVADO',
-            dataEmissao: dataFmt,
-            filialDepto: cp.filial_id || cp.filialDepto || 'MATRIZ - DOURADOS/MS',
-            clienteId: cp.cliente_id || cp.clienteId || '',
-            clienteCodigo: cp.clienteCodigo || '1',
-            clienteNome: rawCliente,
-            clienteCnpjCpf: cp.cliente_cpf_cnpj || cp.clienteCnpjCpf || '',
-            clienteCidade: cp.cliente_cidade || cp.clienteCidade || 'DOURADOS',
-            clienteUf: cp.cliente_uf || cp.clienteUf || 'MS',
-            clienteEndereco: cp.cliente_endereco || cp.clienteEndereco || 'CENTRO',
-            clienteBairro: cp.cliente_bairro || cp.clienteBairro || 'CENTRO',
-            clienteTelefone: cp.clienteTelefone || '',
-            naturezaOperacao: typeof cp.naturezaOperacao === 'object' && cp.naturezaOperacao !== null
-              ? cp.naturezaOperacao
-              : {
-                  cfop: '5102',
-                  descricao: cp.natureza_operacao || '5102 - VENDA DE MERCADORIAS',
-                  tipo: 'SAIDA',
-                  geraFinanceiro: true,
-                  movimentaEstoque: true,
-                  destinacaoPadrao: 'ESTADUAL',
-                },
-            vendedorId: cp.vendedorId || 'VEND-1',
-            vendedorNome: cp.vendedor_nome || cp.vendedorNome || 'CARLOS SILVA (INTERNO)',
-            tabelaPrecos: cp.tabelaPrecos || 'TABELA PADRÃO',
-            tipoFrete: cp.tipoFrete || 'CIF',
-            valorFrete: cp.valorFrete || 0,
-            pesoLiquidoKg: cp.pesoLiquidoKg || 0,
-            pesoBrutoKg: cp.pesoBrutoKg || 0,
-            quantidadeVolumes: cp.quantidadeVolumes || 1,
-            itens: Array.isArray(cp.itens) ? cp.itens : [],
-            totalProdutos: rawTotal,
-            totalDescontoGlobal: 0,
-            totalAcrescimos: 0,
-            totalIpi: 0,
-            totalIcms: 0,
-            totalIcmsSt: 0,
-            totalServicos: 0,
-            valorTotalFinal: rawTotal,
-            formaPagamentoNome: cp.formaPagamentoNome || 'A VISTA / A PRAZO',
-            parcelas: Array.isArray(cp.parcelas) ? cp.parcelas : [],
-          };
-
-          map.set(cp.id, itemFormatado);
-        });
-
-        localList.forEach(p => {
-          if (!map.has(p.id) && !p.id.startsWith('PED-00')) {
-            map.set(p.id, p);
-          }
-        });
-
-        const unificada = Array.from(map.values());
-        localStorage.setItem('coliseu_pedidos_venda_list', JSON.stringify(unificada));
-        setPedidos(unificada);
-        showToast(`✅ Sincronizado! ${unificada.length} pedidos atualizados com a nuvem.`);
-      } else {
-        showToast(`⚠️ Conectado à nuvem, mas nenhum pedido adicional.`);
-      }
-    } catch (err: any) {
-      showToast(`❌ Falha ao sincronizar: ${err?.message || err}`);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
 
   const handleExcluir = (id: string, numero: string) => {
     if (confirm(`Deseja realmente excluir o Pedido Nº ${numero}?`)) {
@@ -384,16 +299,6 @@ export const PedidosVendasPage: React.FC = () => {
               Kanban
             </button>
           </div>
-
-          <Button
-            variant="secondary"
-            onClick={handleForcarSincronizacao}
-            disabled={isSyncing}
-            style={{ display: 'inline-flex', gap: '6px', fontSize: '12px' }}
-            leftIcon={<RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />}
-          >
-            {isSyncing ? 'Sincronizando...' : 'Sincronizar Nuvem'}
-          </Button>
 
           <Button
             variant="primary"
