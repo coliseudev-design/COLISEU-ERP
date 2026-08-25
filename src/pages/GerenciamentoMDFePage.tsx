@@ -436,11 +436,41 @@ export const GerenciamentoMDFePage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Linha 4: Armazenamento */}
+              {/* Linha 4: Armazenamento Central VPS + Cópia Local */}
               <div>
-                <label className="coliseu-label">Local de Armazenamento dos XMLs do MDF-e:</label>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '4px',
+                  }}
+                >
+                  <label className="coliseu-label" style={{ marginBottom: 0 }}>
+                    Cópia Local de Backup no Windows (Opcional - Terminal Desktop):
+                  </label>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      color: 'var(--color-success, #10b981)',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    🌐 Armazenamento Principal Oficial: Servidor Central VPS (/storage/fiscal/xmls/)
+                  </span>
+                </div>
                 <div style={{ display: 'flex', gap: '4px' }}>
-                  <input type="text" value={config.diretorioXmlDestinatario} onChange={(e) => setConfig({ ...config, diretorioXmlDestinatario: e.target.value })} className="coliseu-input" style={{ height: '32px', flex: 1 }} />
+                  <input
+                    type="text"
+                    value={config.diretorioXmlDestinatario}
+                    onChange={(e) => setConfig({ ...config, diretorioXmlDestinatario: e.target.value })}
+                    placeholder="C:\ERPFULL\MDFE\XMLDESTINATARIO\"
+                    className="coliseu-input"
+                    style={{ height: '32px', flex: 1 }}
+                  />
                   <button
                     type="button"
                     onClick={async () => {
@@ -452,7 +482,7 @@ export const GerenciamentoMDFePage: React.FC = () => {
                     }}
                     className="coliseu-btn coliseu-btn-secondary"
                     style={{ height: '32px', padding: '0 10px', fontSize: '11px' }}
-                    title="Selecionar Pasta de Armazenamento do MDF-e"
+                    title="Selecionar Pasta Local de Cópia do MDF-e"
                   >
                     ...
                   </button>

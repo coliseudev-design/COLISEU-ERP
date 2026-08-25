@@ -1024,14 +1024,38 @@ export const GerenciamentoNFePage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Linha 4: Local de Armazenamento dos Arquivos */}
+              {/* Linha 4: Armazenamento Central VPS + Cópia Local */}
               <div>
-                <label className="coliseu-label">Local de Armazenamento dos Arquivos (XMLs Emitidos):</label>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '4px',
+                  }}
+                >
+                  <label className="coliseu-label" style={{ marginBottom: 0 }}>
+                    Cópia Local de Backup no Windows (Opcional - Terminal Desktop):
+                  </label>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      color: 'var(--color-success, #10b981)',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    🌐 Armazenamento Principal Oficial: Servidor Central VPS (/storage/fiscal/xmls/)
+                  </span>
+                </div>
                 <div style={{ display: 'flex', gap: '4px' }}>
                   <input
                     type="text"
                     value={config.pastaArmazenamentoNfe}
                     onChange={(e) => setConfig({ ...config, pastaArmazenamentoNfe: e.target.value })}
+                    placeholder="C:\ERPFULL\NFE\XMLDESTINATARIO\"
                     className="coliseu-input"
                     style={{ height: '32px', flex: 1 }}
                   />
@@ -1046,7 +1070,7 @@ export const GerenciamentoNFePage: React.FC = () => {
                     }}
                     className="coliseu-btn coliseu-btn-secondary"
                     style={{ height: '32px', padding: '0 10px', fontSize: '11px' }}
-                    title="Selecionar Pasta de Saída dos XMLs"
+                    title="Selecionar Pasta Local de Cópia dos XMLs"
                   >
                     ...
                   </button>
