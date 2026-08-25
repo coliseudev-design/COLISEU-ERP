@@ -21,12 +21,13 @@ import {
   getNfceConfig,
   salvarNfceConfig,
 } from '../lib/nfceConfig';
-import { getPedidosVenda, cancelarNotaFiscalPedido } from '../lib/pedidosVenda';
 import { safeInvoke as invoke } from "../lib/ipc";
 import { escolherPasta, escolherArquivoImagem, escolherArquivoCertificado } from '../lib/fileDialogHelper';
+import { CardCertificadoVpsStatus } from '../components/fiscal/CardCertificadoVpsStatus';
+import { ConcentradorXmlsTab } from '../components/fiscal/ConcentradorXmlsTab';
 
 export const GerenciamentoNFCePage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'PRINCIPAL' | 'OUTROS' | 'RESPONSAVEL_TECNICO'>('PRINCIPAL');
+  const [activeTab, setActiveTab] = useState<'PRINCIPAL' | 'OUTROS' | 'RESPONSAVEL_TECNICO' | 'CONCENTRADOR_XMLS'>('PRINCIPAL');
   const [config, setConfig] = useState<NfceConfiguracaoCompleta>(getNfceConfig);
   const [retornoLog, setRetornoLog] = useState<string>(
     `[${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}] - Central de Gerenciamento NFC-e (Mod. 65) pronta para emissão fiscal em PDV.`
@@ -654,6 +655,7 @@ export const GerenciamentoNFCePage: React.FC = () => {
               { key: 'PRINCIPAL', label: 'Dados Principal & CSC/Token' },
               { key: 'OUTROS', label: 'Outros Dados & Cupom' },
               { key: 'RESPONSAVEL_TECNICO', label: 'Responsável Técnico' },
+              { key: 'CONCENTRADOR_XMLS', label: '📁 Concentrador de XMLs NFC-e (VPS)' },
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -680,6 +682,9 @@ export const GerenciamentoNFCePage: React.FC = () => {
           {/* ========================================================================= */}
           {activeTab === 'PRINCIPAL' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {/* Status e Gerenciamento do Certificado Digital A1 no Cofre Central da VPS */}
+              <CardCertificadoVpsStatus empresaId="emp-matriz-001" />
+
               {/* Banner do Motor Fiscal TecnoSpeed NFC-e */}
               <div
                 style={{
@@ -1082,6 +1087,15 @@ export const GerenciamentoNFCePage: React.FC = () => {
                 <div><label className="coliseu-label">ID CSRT:</label><input type="text" value={config.idCsrt} onChange={(e) => setConfig({ ...config, idCsrt: e.target.value })} className="coliseu-input" style={{ height: '32px', textAlign: 'center', fontWeight: 700 }} /></div>
                 <div><label className="coliseu-label">Hash CSRT:</label><input type="text" value={config.hashCsrt} onChange={(e) => setConfig({ ...config, hashCsrt: e.target.value })} className="coliseu-input" style={{ height: '32px', width: '100%', fontFamily: 'monospace' }} /></div>
               </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* ABA 4: CONCENTRADOR ÚNICO DE XMLS NFC-E (VPS) */}
+          {/* ========================================================================= */}
+          {activeTab === 'CONCENTRADOR_XMLS' && (
+            <div style={{ paddingTop: '6px' }}>
+              <ConcentradorXmlsTab modeloFiltroPadrao="65" />
             </div>
           )}
         </div>

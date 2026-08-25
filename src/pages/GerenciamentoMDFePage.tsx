@@ -21,12 +21,13 @@ import {
   MdfeConfiguracaoCompleta,
   getMdfeConfig,
   salvarMdfeConfig,
-} from '../lib/mdfeConfig';
 import { safeInvoke as invoke } from "../lib/ipc";
 import { escolherPasta, escolherArquivoImagem, escolherArquivoCertificado } from '../lib/fileDialogHelper';
+import { CardCertificadoVpsStatus } from '../components/fiscal/CardCertificadoVpsStatus';
+import { ConcentradorXmlsTab } from '../components/fiscal/ConcentradorXmlsTab';
 
 export const GerenciamentoMDFePage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'PRINCIPAL' | 'PASTAS_TECNOSPEED' | 'FROTA_SEGURO' | 'RESPONSAVEL_TECNICO'>('PRINCIPAL');
+  const [activeTab, setActiveTab] = useState<'PRINCIPAL' | 'PASTAS_TECNOSPEED' | 'FROTA_SEGURO' | 'RESPONSAVEL_TECNICO' | 'CONCENTRADOR_XMLS'>('PRINCIPAL');
   const [config, setConfig] = useState<MdfeConfiguracaoCompleta>(getMdfeConfig);
   const [retornoLog, setRetornoLog] = useState<string>(
     `[${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}] - Central de Gerenciamento MDF-e (Mod. 58) & Motor TecnoSpeed pronta para emissão de manifestos e controle de carga.`
@@ -326,6 +327,7 @@ export const GerenciamentoMDFePage: React.FC = () => {
               { key: 'PASTAS_TECNOSPEED', label: '2. Apontamento de Pastas (TecnoSpeed)' },
               { key: 'FROTA_SEGURO', label: '3. Frota, Condutores & Seguro de Carga' },
               { key: 'RESPONSAVEL_TECNICO', label: '4. Responsável Técnico' },
+              { key: 'CONCENTRADOR_XMLS', label: '5. 📁 Concentrador de XMLs MDF-e (VPS)' },
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -352,6 +354,9 @@ export const GerenciamentoMDFePage: React.FC = () => {
           {/* ========================================================================= */}
           {activeTab === 'PRINCIPAL' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {/* Status e Gerenciamento do Certificado Digital A1 no Cofre Central da VPS */}
+              <CardCertificadoVpsStatus empresaId="emp-matriz-001" />
+
               {/* Linha 1: CNPJ e Nome */}
               <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 2.5fr', gap: '10px' }}>
                 <div>
@@ -581,6 +586,13 @@ export const GerenciamentoMDFePage: React.FC = () => {
                 <div><label className="coliseu-label">ID CSRT:</label><input type="text" value={config.idCsrt} onChange={(e) => setConfig({ ...config, idCsrt: e.target.value })} className="coliseu-input" style={{ height: '32px', textAlign: 'center', fontWeight: 700 }} /></div>
                 <div><label className="coliseu-label">Hash CSRT:</label><input type="text" value={config.hashCsrt} onChange={(e) => setConfig({ ...config, hashCsrt: e.target.value })} className="coliseu-input" style={{ height: '32px', width: '100%', fontFamily: 'monospace' }} /></div>
               </div>
+            </div>
+          )}
+
+          {/* ABA 5: CONCENTRADOR ÚNICO DE XMLS MDF-E (VPS) */}
+          {activeTab === 'CONCENTRADOR_XMLS' && (
+            <div style={{ paddingTop: '6px' }}>
+              <ConcentradorXmlsTab modeloFiltroPadrao="58" />
             </div>
           )}
         </div>

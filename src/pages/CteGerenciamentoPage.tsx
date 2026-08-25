@@ -18,10 +18,12 @@ import {
 import { CteConfiguracaoCompleta, getCteConfig, salvarCteConfig } from '../lib/cteConfig';
 import { escolherPasta, escolherArquivoImagem, escolherArquivoCertificado } from '../lib/fileDialogHelper';
 import { safeInvoke as invoke } from "../lib/ipc";
+import { CardCertificadoVpsStatus } from '../components/fiscal/CardCertificadoVpsStatus';
+import { ConcentradorXmlsTab } from '../components/fiscal/ConcentradorXmlsTab';
 
 export const CteGerenciamentoPage: React.FC = () => {
   const [config, setConfig] = useState<CteConfiguracaoCompleta>(getCteConfig);
-  const [activeTab, setActiveTab] = useState<'PARAMETROS' | 'PASTAS_TECNOSPEED' | 'ACOES_SEFAZ' | 'RESPONSAVEL_TECNICO' | 'LOGS'>('PARAMETROS');
+  const [activeTab, setActiveTab] = useState<'PARAMETROS' | 'PASTAS_TECNOSPEED' | 'ACOES_SEFAZ' | 'RESPONSAVEL_TECNICO' | 'CONCENTRADOR_XMLS' | 'LOGS'>('PARAMETROS');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [retornoLog, setRetornoLog] = useState<string>(
     `[${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}] - Central de Gerenciamento do CT-e 4.00 & Motor TecnoSpeed pronta para operação.`
@@ -175,7 +177,8 @@ export const CteGerenciamentoPage: React.FC = () => {
             { id: 'PASTAS_TECNOSPEED', label: '2. Apontamento de Diretórios (TecnoSpeed)' },
             { id: 'ACOES_SEFAZ', label: '3. Ações, Consultas & Layout DACTE' },
             { id: 'RESPONSAVEL_TECNICO', label: '4. Responsável Técnico (CSRT)' },
-            { id: 'LOGS', label: '5. Log de Comunicação SEFAZ' },
+            { id: 'CONCENTRADOR_XMLS', label: '5. 📁 Concentrador de XMLs CT-e (VPS)' },
+            { id: 'LOGS', label: '6. Log de Comunicação SEFAZ' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -201,6 +204,8 @@ export const CteGerenciamentoPage: React.FC = () => {
           {/* ABA 1: PARÂMETROS FISCAIS & CERTIFICADO */}
           {activeTab === 'PARAMETROS' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* Status e Gerenciamento do Certificado Digital A1 no Cofre Central da VPS */}
+              <CardCertificadoVpsStatus empresaId="emp-matriz-001" />
               <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 2.5fr 1fr', gap: '10px' }}>
                 <div>
                   <label className="coliseu-label">CNPJ do Emitente:</label>
@@ -444,7 +449,14 @@ export const CteGerenciamentoPage: React.FC = () => {
             </div>
           )}
 
-          {/* ABA 5: LOGS */}
+          {/* ABA 5: CONCENTRADOR ÚNICO DE XMLS CT-E (VPS) */}
+          {activeTab === 'CONCENTRADOR_XMLS' && (
+            <div style={{ paddingTop: '6px' }}>
+              <ConcentradorXmlsTab modeloFiltroPadrao="57" />
+            </div>
+          )}
+
+          {/* ABA 6: LOGS */}
           {activeTab === 'LOGS' && (
             <textarea
               readOnly

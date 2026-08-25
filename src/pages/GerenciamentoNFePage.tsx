@@ -39,6 +39,8 @@ import {
   escolherArquivoImagem,
   escolherArquivoCertificado,
 } from '../lib/fileDialogHelper';
+import { CardCertificadoVpsStatus } from '../components/fiscal/CardCertificadoVpsStatus';
+import { ConcentradorXmlsTab } from '../components/fiscal/ConcentradorXmlsTab';
 
 export const obterSiglaUf = (uf: string | undefined): string => {
   if (!uf) return 'MS';
@@ -57,7 +59,7 @@ export const obterSiglaUf = (uf: string | undefined): string => {
 };
 
 export const GerenciamentoNFePage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'PRINCIPAL' | 'OUTROS' | 'RESPONSAVEL_TECNICO'>('PRINCIPAL');
+  const [activeTab, setActiveTab] = useState<'PRINCIPAL' | 'OUTROS' | 'RESPONSAVEL_TECNICO' | 'CONCENTRADOR_XMLS'>('PRINCIPAL');
   const [config, setConfig] = useState<NfeConfiguracaoCompleta>(getNfeConfig);
   const [retornoLog, setRetornoLog] = useState<string>(
     `[${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}] - Sistema de Gerenciamento NF-e SEFAZ 4.00 pronto para operação.`
@@ -711,6 +713,7 @@ export const GerenciamentoNFePage: React.FC = () => {
               { key: 'PRINCIPAL', label: 'Dados Principal' },
               { key: 'OUTROS', label: 'Outros Dados' },
               { key: 'RESPONSAVEL_TECNICO', label: 'Responsável Técnico' },
+              { key: 'CONCENTRADOR_XMLS', label: '📁 Concentrador de XMLs (VPS)' },
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -737,6 +740,9 @@ export const GerenciamentoNFePage: React.FC = () => {
           {/* ========================================================================= */}
           {activeTab === 'PRINCIPAL' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {/* Status e Gerenciamento do Certificado Digital A1 no Cofre Central da VPS */}
+              <CardCertificadoVpsStatus empresaId="emp-matriz-001" />
+
               {/* Painel Exclusivo de Operação: TecnoSpeed Componente Nativo */}
               <div style={{
                 padding: '12px 16px',
@@ -1336,6 +1342,15 @@ export const GerenciamentoNFePage: React.FC = () => {
                   />
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* ABA 4: CONCENTRADOR ÚNICO DE XMLS AUTORIZADOS (VPS) */}
+          {/* ========================================================================= */}
+          {activeTab === 'CONCENTRADOR_XMLS' && (
+            <div style={{ paddingTop: '6px' }}>
+              <ConcentradorXmlsTab modeloFiltroPadrao="55" />
             </div>
           )}
         </div>
