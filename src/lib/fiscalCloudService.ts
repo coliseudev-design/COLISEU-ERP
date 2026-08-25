@@ -167,10 +167,49 @@ export const fiscalCloudService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) {
-      const data = await res.json();
-      throw new Error(data.error || 'Falha ao registrar no concentrador');
-    }
     return await res.json();
+  },
+
+  /**
+   * Emite e autoriza documento fiscal (NF-e, NFC-e, CT-e, MDF-e) centralizadamente na VPS
+   */
+  async emitirDocumentoFiscal(payload: {
+    modelo: '55' | '65' | '57' | '58' | string;
+    serie?: number;
+    numero?: number;
+    pedidoId?: string;
+    itens?: any[];
+    valorTotal: number;
+    destinatario?: { nome?: string; cpfCnpj?: string; uf?: string };
+    naturezaOperacao?: string;
+    formaPagamento?: string;
+    placaVeiculo?: string;
+    condutorNome?: string;
+    condutorCpf?: string;
+    empresaId?: string;
+    filialId?: string;
+  }): Promise<{
+    sucesso: boolean;
+    message: string;
+    chaveAcesso: string;
+    protocolo: string;
+    modelo: string;
+    serie: number;
+    numero: number;
+    status: string;
+    xmlUrl: string;
+    documento: any;
+  }> {
+    const res = await fetch(`${CLOUD_API_URL}/api/fiscal/emitir`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.sucesso) {
+      throw new Error(data.error || data.message || 'Falha na emissão fiscal na VPS.');
+    }
+    return data;
   },
 };

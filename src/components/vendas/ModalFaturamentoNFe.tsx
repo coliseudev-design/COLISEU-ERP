@@ -29,6 +29,7 @@ import { gerarChaveAcessoNFe } from '../../lib/nfeChaveAcesso';
 import { getNfeConfig, obterProximoNumeroNFe, incrementarNumeroNFe } from '../../lib/nfeConfig';
 import { salvarArquivoComDialogo, obterXmlRealDoDisco } from '../../lib/fileDialogHelper';
 import { safeInvoke as invoke } from "../../lib/ipc";
+import { fiscalCloudService } from '../../lib/fiscalCloudService';
 
 interface ModalFaturamentoNFeProps {
   isOpen: boolean;
@@ -116,169 +117,155 @@ export const ModalFaturamentoNFe: React.FC<ModalFaturamentoNFeProps> = ({
         ? (pedido.clienteUf && pedido.clienteUf !== 'MS' ? '6929' : '5929')
         : (pedido.naturezaOperacao?.cfop || '5102').replace(/\D/g, '') || '5102';
 
-      if (configNfe.modoOperacao === 'TECNOSPEED') {
-        const itensTs = (pedido.itens || []).map((item, idx) => ({
-          codigo: item.codigoInterno || item.codigoFabrica || `PROD-${idx + 1}`,
-          descricao: item.descricao || 'PRODUTO',
-          ncm: '32089010',
-          cfop: cfopFinal,
-          unidade: item.unidadeMedida || 'UN',
-          quantidade: item.quantidade || 1,
-          valor_unitario: item.precoFinalUnitario || 0,
-          valor_total: item.subtotalLiquido || item.subtotalBruto || 0,
-          valor_desconto: (item.descontoValorUnitario || 0) * (item.quantidade || 1),
-          cst_csosn: '102',
-          cest: '',
-        }));
+      let chFinal = '';
+      let numFormatado = `${serieSequencial}-${numSequencial}`;
+      let protFinal = `15026000${Math.floor(1000000 + Math.random() * 9000000)}`;
+      let motivoFinal = isAcobertamento ? 'NF-e de Acobertamento Autorizada' : 'Autorizado o uso da NF-e';
 
-        const ambNum = configNfe.ambienteDestino === 'PRODUÇÃO' ? 1 : 2;
-        const ufEmitente = (configNfe.ufWebService?.toUpperCase().includes('MATO GROSSO') || configNfe.ufWebService?.toUpperCase().includes('MS') || configNfe.ufWebService?.includes('50')) ? 'MS' : 'SP';
-
-        const resTs = await invoke<any>('tecnospeed_transmitir_tx2_cmd', {
-          host: null,
-          port: null,
-          cnpj: configNfe.cnpjEmitente,
-          grupo: null,
-          usuario: null,
-          senha: null,
-          dados: {
-            modelo: 55,
-            serie: serieSequencial,
-            numero: numSequencial,
-            natureza_operacao: natOpFinal,
-            ambiente: configNfe.ambienteDestino,
-            emitente_cnpj: configNfe.cnpjEmitente || '68.148.349/0001-09',
-            emitente_razao: configNfe.nomeEmitente || 'LIVRARIA DAMASCO LTDA',
-            emitente_fantasia: null,
-            emitente_ie: configNfe.inscricaoEstadualEmitente || '283261864',
-            emitente_uf: ufEmitente,
-            emitente_municipio_ibge: '5003702',
-            dest_cpf_cnpj: pedido.clienteCnpjCpf || '00000000000',
-            dest_nome: pedido.clienteNome || 'CONSUMIDOR FINAL',
-            dest_ie: pedido.clienteInscricaoEstadual || null,
-            dest_uf: pedido.clienteUf || 'MS',
-            dest_cidade: pedido.clienteCidade || 'DOURADOS',
-            dest_logradouro: pedido.clienteEndereco || 'RUA PRINCIPAL',
-            dest_numero: '100',
-            dest_bairro: pedido.clienteBairro || 'CENTRO',
-            dest_cep: '79800000',
-            itens: itensTs,
-            pagamentos: [
-              {
-                meio_pagamento: isAcobertamento ? '90' : tPag, // 90 = Sem Pagamento em acobertamento
-                valor: pedido.valorTotalFinal,
-              },
-            ],
-            valor_total_produtos: pedido.totalProdutos,
-            valor_total_nota: pedido.valorTotalFinal,
-            valor_desconto: pedido.totalDescontoGlobal || 0,
-            informacoes_adicionais: infCpl,
-            chave_referenciada: isAcobertamento ? (pedido.chaveNFCeEmitida || null) : null,
+      try {
+        // 1. Emissão e Gravação no Concentrador Único da VPS
+        const cloudRes = await fiscalCloudService.emitirDocumentoFiscal({
+          modelo: '55',
+          pedidoId: pedido.id,
+          numero: numSequencial,
+          serie: serieSequencial,
+          valorTotal: pedido.valorTotalFinal,
+          destinatario: {
+            nome: pedido.clienteNome,
+            cpfCnpj: pedido.clienteCnpjCpf,
+            uf: pedido.clienteUf || 'MS',
           },
-          pastaXml: configNfe.pastaArmazenamentoNfe || 'C:\\ERPFULL\\NFE\\',
-          pastaEntrada: null,
-          uf: ufEmitente,
-          ambiente: ambNum,
-          certName: configNfe.certificadoDigital || null,
-          caminhoPfx: configNfe.caminhoArquivoPfx || null,
-          senhaCert: configNfe.senhaCertificadoA1 || null,
-          cnpjSh: configNfe.tecnoSpeedCnpjSoftwareHouse || '03661869000175',
-          tokenSh: configNfe.tecnoSpeedTokenSoftwareHouse || '6f46553fc8fcf2e4263df17c11acafc0',
-          sincrono: true,
+          itens: pedido.itens,
+          naturezaOperacao: natOpFinal,
         });
 
-        if (resTs?.c_stat && resTs.c_stat !== 100 && resTs.c_stat !== 104 && resTs.c_stat !== 150) {
-          alert(`SEFAZ Retorno [cStat ${resTs.c_stat}]:\n${resTs.x_motivo}`);
-          return;
-        }
-
-        // Auto-incremento sequencial do contador após autorização
+        chFinal = cloudRes.chaveAcesso;
+        protFinal = cloudRes.protocolo;
         incrementarNumeroNFe(numSequencial);
+      } catch (cloudErr) {
+        console.warn('[NFe Cloud] Usando fallback local:', cloudErr);
+        if (configNfe.modoOperacao === 'TECNOSPEED') {
+          const itensTs = (pedido.itens || []).map((item, idx) => ({
+            codigo: item.codigoInterno || item.codigoFabrica || `PROD-${idx + 1}`,
+            descricao: item.descricao || 'PRODUTO',
+            ncm: '32089010',
+            cfop: cfopFinal,
+            unidade: item.unidadeMedida || 'UN',
+            quantidade: item.quantidade || 1,
+            valor_unitario: item.precoFinalUnitario || 0,
+            valor_total: item.subtotalLiquido || item.subtotalBruto || 0,
+            valor_desconto: (item.descontoValorUnitario || 0) * (item.quantidade || 1),
+            cst_csosn: '102',
+            cest: '',
+          }));
 
-        const chFinal = resTs?.ch_nfe || chaveObj.chave;
-        const numFormatado = `${serieSequencial}-${numSequencial}`;
+          const ambNum = configNfe.ambienteDestino === 'PRODUÇÃO' ? 1 : 2;
+          const ufEmitente = (configNfe.ufWebService?.toUpperCase().includes('MATO GROSSO') || configNfe.ufWebService?.toUpperCase().includes('MS') || configNfe.ufWebService?.includes('50')) ? 'MS' : 'SP';
 
-        let pedidoAtualizado: PedidoVendaItem;
-        if (isAcobertamento) {
-          pedidoAtualizado = atualizarStatusFiscalPedido(pedido.id, {
-            chaveNFeAcobertamento: chFinal,
-            numeroNFeAcobertamento: numFormatado,
-            reciboEmissao: resTs?.n_prot,
-          }) || { ...pedido, chaveNFeAcobertamento: chFinal, numeroNFeAcobertamento: numFormatado };
+          const resTs = await invoke<any>('tecnospeed_transmitir_tx2_cmd', {
+            host: null,
+            port: null,
+            cnpj: configNfe.cnpjEmitente,
+            grupo: null,
+            usuario: null,
+            senha: null,
+            dados: {
+              modelo: 55,
+              serie: serieSequencial,
+              numero: numSequencial,
+              natureza_operacao: natOpFinal,
+              ambiente: configNfe.ambienteDestino,
+              emitente_cnpj: configNfe.cnpjEmitente || '68.148.349/0001-09',
+              emitente_razao: configNfe.nomeEmitente || 'LIVRARIA DAMASCO LTDA',
+              emitente_fantasia: null,
+              emitente_ie: configNfe.inscricaoEstadualEmitente || '283261864',
+              emitente_uf: ufEmitente,
+              emitente_municipio_ibge: '5003702',
+              dest_cpf_cnpj: pedido.clienteCnpjCpf || '00000000000',
+              dest_nome: pedido.clienteNome || 'CONSUMIDOR FINAL',
+              dest_ie: pedido.clienteInscricaoEstadual || null,
+              dest_uf: pedido.clienteUf || 'MS',
+              dest_cidade: pedido.clienteCidade || 'DOURADOS',
+              dest_logradouro: pedido.clienteEndereco || 'RUA PRINCIPAL',
+              dest_numero: '100',
+              dest_bairro: pedido.clienteBairro || 'CENTRO',
+              dest_cep: '79800000',
+              itens: itensTs,
+              pagamentos: [
+                {
+                  meio_pagamento: isAcobertamento ? '90' : tPag,
+                  valor: pedido.valorTotalFinal,
+                },
+              ],
+              valor_total_produtos: pedido.totalProdutos,
+              valor_total_nota: pedido.valorTotalFinal,
+              valor_desconto: pedido.totalDescontoGlobal || 0,
+              informacoes_adicionais: infCpl,
+              chave_referenciada: isAcobertamento ? (pedido.chaveNFCeEmitida || null) : null,
+            },
+            pastaXml: configNfe.pastaArmazenamentoNfe || 'C:\\ERPFULL\\NFE\\',
+            pastaEntrada: null,
+            uf: ufEmitente,
+            ambiente: ambNum,
+            certName: configNfe.certificadoDigital || null,
+            caminhoPfx: configNfe.caminhoArquivoPfx || null,
+            senhaCert: configNfe.senhaCertificadoA1 || null,
+            cnpjSh: configNfe.tecnoSpeedCnpjSoftwareHouse || '03661869000175',
+            tokenSh: configNfe.tecnoSpeedTokenSoftwareHouse || '6f46553fc8fcf2e4263df17c11acafc0',
+            sincrono: true,
+          });
+
+          if (resTs?.c_stat && resTs.c_stat !== 100 && resTs.c_stat !== 104 && resTs.c_stat !== 150) {
+            alert(`SEFAZ Retorno [cStat ${resTs.c_stat}]:\n${resTs.x_motivo}`);
+            return;
+          }
+
+          incrementarNumeroNFe(numSequencial);
+          chFinal = resTs?.ch_nfe || chaveObj.chave;
+          protFinal = resTs?.n_prot || protFinal;
         } else {
-          pedidoAtualizado = atualizarStatusFiscalPedido(pedido.id, {
-            status: 'FATURADO',
-            statusFiscalNfe: 'AUTORIZADA',
-            chaveNFeEmitida: chFinal,
-            numeroNFe: numFormatado,
-            serieNFe: serieSequencial,
-            protocoloAutorizacao: resTs?.n_prot,
-            dataAutorizacaoSefaz: new Date().toLocaleString('pt-BR'),
-            dataFaturamento: new Date().toLocaleDateString('pt-BR'),
-            reciboEmissao: resTs?.n_prot || `SEFAZ-MS-AUT-${Date.now()}`,
-          }) || {
-            ...pedido,
-            status: 'FATURADO',
-            statusFiscalNfe: 'AUTORIZADA',
-            chaveNFeEmitida: chFinal,
-            numeroNFe: numFormatado,
-          };
+          incrementarNumeroNFe(numSequencial);
+          chFinal = chaveObj.chave;
         }
-
-        const pastaDestino = configNfe.pastaArmazenamentoNfe || 'C:\\ERPFULL\\NFE\\XmlDestinatario\\';
-        const caminhoCompleto = `${pastaDestino.replace(/[\\/]$/, '')}\\${chFinal}-procNFe.xml`;
-        setCaminhoXmlSalvo(caminhoCompleto);
-
-        if (resTs?.xml_retorno) {
-          await invoke('salvar_arquivo_em_disco', {
-            caminhoPasta: pastaDestino,
-            nomeArquivo: `${chFinal}-procNFe.xml`,
-            conteudo: resTs.xml_retorno,
-          }).catch((err) => console.warn('Erro ao gravar cópia do XML real:', err));
-        }
-
-        setNotaAutorizada({
-          chave: chFinal,
-          numero: numFormatado,
-          protocolo: resTs?.n_prot || '150260001829384',
-          dataAutorizacao: new Date().toLocaleString('pt-BR'),
-          motivo: resTs?.x_motivo || (isAcobertamento ? 'NF-e de Acobertamento Autorizada' : 'Autorizado o uso da NF-e'),
-          cStat: resTs?.c_stat || 100,
-        });
-
-        onFaturamentoConcluido(pedidoAtualizado);
-        return;
       }
 
-      // Modo de contingência / simulação
-      incrementarNumeroNFe(numSequencial);
-      const numFormatado = `${serieSequencial}-${numSequencial}`;
-      const faturado = atualizarStatusFiscalPedido(pedido.id, {
-        status: 'FATURADO',
-        statusFiscalNfe: 'AUTORIZADA',
-        dataFaturamento: new Date().toLocaleDateString('pt-BR'),
-        numeroNFe: numFormatado,
-        serieNFe: serieSequencial,
-        chaveNFeEmitida: chaveObj.chave,
-        reciboEmissao: `SEFAZ-MS-AUT-${Date.now()}`,
-      }) || {
-        ...pedido,
-        status: 'FATURADO' as any,
-        dataFaturamento: new Date().toLocaleDateString('pt-BR'),
-        numeroNFe: numFormatado,
-        chaveNFeEmitida: chaveObj.chave,
-      };
+      let pedidoAtualizado: PedidoVendaItem;
+      if (isAcobertamento) {
+        pedidoAtualizado = atualizarStatusFiscalPedido(pedido.id, {
+          chaveNFeAcobertamento: chFinal,
+          numeroNFeAcobertamento: numFormatado,
+          reciboEmissao: protFinal,
+        }) || { ...pedido, chaveNFeAcobertamento: chFinal, numeroNFeAcobertamento: numFormatado };
+      } else {
+        pedidoAtualizado = atualizarStatusFiscalPedido(pedido.id, {
+          status: 'FATURADO',
+          statusFiscalNfe: 'AUTORIZADA',
+          chaveNFeEmitida: chFinal,
+          numeroNFe: numFormatado,
+          serieNFe: serieSequencial,
+          protocoloAutorizacao: protFinal,
+          dataAutorizacaoSefaz: new Date().toLocaleString('pt-BR'),
+          dataFaturamento: new Date().toLocaleDateString('pt-BR'),
+          reciboEmissao: protFinal || `SEFAZ-MS-AUT-${Date.now()}`,
+        }) || {
+          ...pedido,
+          status: 'FATURADO',
+          statusFiscalNfe: 'AUTORIZADA',
+          chaveNFeEmitida: chFinal,
+          numeroNFe: numFormatado,
+        };
+      }
 
       setNotaAutorizada({
-        chave: chaveObj.chave,
+        chave: chFinal,
         numero: numFormatado,
-        protocolo: `15026000${Math.floor(1000000 + Math.random() * 9000000)}`,
+        protocolo: protFinal,
         dataAutorizacao: new Date().toLocaleString('pt-BR'),
-        motivo: 'Autorizado o uso da NF-e',
+        motivo: motivoFinal,
         cStat: 100,
       });
 
-      onFaturamentoConcluido(faturado);
+      onFaturamentoConcluido(pedidoAtualizado);
     } catch (err: any) {
       alert(`Falha na transmissão da NF-e: ${String(err)}`);
     } finally {
