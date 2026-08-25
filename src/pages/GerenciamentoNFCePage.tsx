@@ -21,6 +21,7 @@ import {
   getNfceConfig,
   salvarNfceConfig,
 } from '../lib/nfceConfig';
+import { getPedidosVenda, cancelarNotaFiscalPedido } from '../lib/pedidosVenda';
 import { safeInvoke as invoke } from "../lib/ipc";
 import { escolherPasta, escolherArquivoImagem, escolherArquivoCertificado } from '../lib/fileDialogHelper';
 import { CardCertificadoVpsStatus } from '../components/fiscal/CardCertificadoVpsStatus';

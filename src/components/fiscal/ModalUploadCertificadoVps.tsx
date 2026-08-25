@@ -168,7 +168,7 @@ export const ModalUploadCertificadoVps: React.FC<ModalUploadCertificadoVpsProps>
                 gap: '8px',
               }}
             >
-              <AlertTriangle size={15} flexShrink={0} />
+              <AlertTriangle size={15} style={{ flexShrink: 0 }} />
               <span>{errorMsg}</span>
             </div>
           )}
