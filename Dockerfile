@@ -32,8 +32,8 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --prefer-offline --no-audit
 
-# Copiar script do servidor de API e sincronização
-COPY server.js ./
+# Copiar script do servidor de API, sincronização e motor fiscal
+COPY server.js fiscalEngine.js ./
 
 # Copiar os arquivos estáticos compilados do estágio anterior
 COPY --from=builder /app/dist ./dist

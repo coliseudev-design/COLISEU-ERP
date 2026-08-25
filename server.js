@@ -1236,6 +1236,12 @@ app.get('/api/fiscal/certificados/status', async (req, res) => {
       });
     }
 
+    return res.json({ instalado: false, message: 'Nenhum certificado A1 ativo cadastrado na VPS.' });
+  } catch (err) {
+    return res.json({ instalado: false, error: err.message });
+  }
+});
+
 // 7.2.1 Emissão e Transmissão Centralizada na VPS (NF-e 55, NFC-e 65, CT-e 57, MDF-e 58)
 app.post('/api/fiscal/emitir', async (req, res) => {
   const {
