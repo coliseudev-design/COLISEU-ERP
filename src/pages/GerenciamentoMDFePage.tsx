@@ -21,6 +21,7 @@ import {
   MdfeConfiguracaoCompleta,
   getMdfeConfig,
   salvarMdfeConfig,
+} from '../lib/mdfeConfig';
 import { safeInvoke as invoke } from "../lib/ipc";
 import { escolherPasta, escolherArquivoImagem, escolherArquivoCertificado } from '../lib/fileDialogHelper';
 import { CardCertificadoVpsStatus } from '../components/fiscal/CardCertificadoVpsStatus';
