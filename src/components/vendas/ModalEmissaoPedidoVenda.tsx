@@ -409,8 +409,8 @@ export const ModalEmissaoPedidoVenda: React.FC<ModalEmissaoPedidoVendaProps> = (
   };
 
   const handleConfirmarVenda = () => {
-    if (isProcessado) {
-      alert('Esta venda já foi processada e finalizada. Cancele a venda para permitir alterações.');
+    if (normStatus === 'PROCESSADO' && pedidoEdicao?.status === 'PROCESSADO') {
+      alert('Esta venda já foi processada e finalizada. Cancele a venda caso precise alterar.');
       return;
     }
     if (itens.length === 0) {
@@ -419,8 +419,7 @@ export const ModalEmissaoPedidoVenda: React.FC<ModalEmissaoPedidoVendaProps> = (
     }
 
     const pedido = montarObjetoPedido('PROCESSADO');
-    salvarPedidoVenda(pedido);
-    const res = processarVendaCompleta(pedido.id);
+    const res = processarVendaCompleta(pedido);
     if (res.success && res.pedido) {
       onSaveSuccess(res.pedido);
       onClose();
@@ -430,7 +429,10 @@ export const ModalEmissaoPedidoVenda: React.FC<ModalEmissaoPedidoVendaProps> = (
   };
 
   const handleReabrirParaEdicao = () => {
-    if (!pedidoEdicao) return;
+    if (!pedidoEdicao) {
+      setStatus('EM_ABERTO');
+      return;
+    }
     const res = reabrirPedidoParaEdicao(pedidoEdicao.id);
     if (res.success && res.pedido) {
       setStatus('EM_ABERTO');

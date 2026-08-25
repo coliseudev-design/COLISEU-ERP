@@ -756,26 +756,23 @@ export function aprovarPedidoComercial(pedidoId: string): PedidoVendaItem | null
  * 1. Baixa estoque
  * 2. Lança contas a receber no financeiro
  * 3. Registra data de faturamento
- * 4. Bloqueia reprocessamento acidental
+ * 4. Bloqueia duplicações limpando parcelas anteriores
  */
-export function processarVendaCompleta(pedidoId: string): {
+export function processarVendaCompleta(pedidoOuId: PedidoVendaItem | string): {
   success: boolean;
   message: string;
   pedido?: PedidoVendaItem;
 } {
-  const lista = getPedidosVenda();
-  const index = lista.findIndex((p) => p.id === pedidoId || p.numeroPedido === pedidoId);
-  if (index < 0) {
-    return { success: false, message: 'Pedido não encontrado.' };
-  }
-
-  const ped = { ...lista[index] };
-  if (ped.status === 'PROCESSADO' || ped.status === 'FATURADO') {
-    return {
-      success: false,
-      message: 'Esta venda já foi processada e finalizada. Cancele a venda para permitir alterações.',
-      pedido: ped,
-    };
+  let ped: PedidoVendaItem;
+  if (typeof pedidoOuId === 'string') {
+    const lista = getPedidosVenda();
+    const index = lista.findIndex((p) => p.id === pedidoOuId || p.numeroPedido === pedidoOuId);
+    if (index < 0) {
+      return { success: false, message: 'Pedido não encontrado.' };
+    }
+    ped = { ...lista[index] };
+  } else {
+    ped = { ...pedidoOuId };
   }
 
   // 1. Baixa de estoque dos itens
@@ -800,44 +797,47 @@ export function processarVendaCompleta(pedidoId: string): {
   // 2. Lançamento no Contas a Receber (Financeiro)
   try {
     const rawFin = localStorage.getItem('coliseu_titulos_receber_v1');
-    const titulos = rawFin ? JSON.parse(rawFin) : [];
-    if (Array.isArray(titulos)) {
-      if (ped.parcelas && ped.parcelas.length > 0) {
-        ped.parcelas.forEach((parc, pIdx) => {
-          titulos.push({
-            id: `rec-${ped.numeroPedido}-${pIdx + 1}`,
-            pedidoId: ped.id,
-            numeroDocumento: parc.numeroDocumento || `${ped.numeroPedido}/${pIdx + 1}`,
-            clienteNome: ped.clienteNome,
-            clienteCnpjCpf: ped.clienteCnpjCpf,
-            dataEmissao: ped.dataEmissao,
-            dataVencimento: parc.dataVencimento,
-            valor: parc.valorParcela,
-            especie: parc.especiePagamento,
-            status: 'PENDENTE',
-          });
-        });
-      } else {
+    let titulos = rawFin ? JSON.parse(rawFin) : [];
+    if (!Array.isArray(titulos)) titulos = [];
+
+    // Limpar títulos antigos do mesmo pedido se foi reaberto/reprocessado
+    titulos = titulos.filter((t: any) => t.pedidoId !== ped.id && !String(t.id).startsWith(`rec-${ped.numeroPedido}`));
+
+    if (ped.parcelas && ped.parcelas.length > 0) {
+      ped.parcelas.forEach((parc, pIdx) => {
         titulos.push({
-          id: `rec-${ped.numeroPedido}-1`,
+          id: `rec-${ped.numeroPedido}-${pIdx + 1}`,
           pedidoId: ped.id,
-          numeroDocumento: `${ped.numeroPedido}/01`,
+          numeroDocumento: parc.numeroDocumento || `${ped.numeroPedido}/${pIdx + 1}`,
           clienteNome: ped.clienteNome,
           clienteCnpjCpf: ped.clienteCnpjCpf,
           dataEmissao: ped.dataEmissao,
-          dataVencimento: new Date().toLocaleDateString('pt-BR'),
-          valor: ped.valorTotalFinal,
-          especie: ped.formaPagamentoNome || 'BOLETO BANCARIO',
+          dataVencimento: parc.dataVencimento,
+          valor: parc.valorParcela,
+          especie: parc.especiePagamento,
           status: 'PENDENTE',
         });
-      }
-      localStorage.setItem('coliseu_titulos_receber_v1', JSON.stringify(titulos));
+      });
+    } else {
+      titulos.push({
+        id: `rec-${ped.numeroPedido}-1`,
+        pedidoId: ped.id,
+        numeroDocumento: `${ped.numeroPedido}/01`,
+        clienteNome: ped.clienteNome,
+        clienteCnpjCpf: ped.clienteCnpjCpf,
+        dataEmissao: ped.dataEmissao,
+        dataVencimento: new Date().toLocaleDateString('pt-BR'),
+        valor: ped.valorTotalFinal,
+        especie: ped.formaPagamentoNome || 'BOLETO BANCARIO',
+        status: 'PENDENTE',
+      });
     }
+    localStorage.setItem('coliseu_titulos_receber_v1', JSON.stringify(titulos));
   } catch (err) {
     console.warn('[Financeiro] Aviso ao lançar títulos:', err);
   }
 
-  // 3. Atualizar estado do Pedido
+  // 3. Atualizar estado do Pedido para PROCESSADO
   ped.status = 'PROCESSADO';
   ped.dataFaturamento = new Date().toLocaleDateString('pt-BR');
   salvarPedidoVenda(ped);
