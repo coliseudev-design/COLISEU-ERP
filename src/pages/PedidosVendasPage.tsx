@@ -23,6 +23,7 @@ import {
   GripVertical,
   Columns,
   RotateCcw,
+  Ban,
 } from 'lucide-react';
 import {
   PedidoVendaItem,
@@ -33,12 +34,16 @@ import {
   podeFaturarPedidoNFe,
   podeFaturarPedidoNFCe,
   podeEmitirAcobertamento,
+  getStatusConfig,
+  normalizarStatusPedido,
+  cancelarPedidoVenda,
 } from '../lib/pedidosVenda';
 import { syncService } from '../lib/syncService';
 import { ModalEmissaoPedidoVenda } from '../components/vendas/ModalEmissaoPedidoVenda';
 import { ModalImpressaoPedidoA4 } from '../components/vendas/ModalImpressaoPedidoA4';
 import { ModalFaturamentoNFe } from '../components/vendas/ModalFaturamentoNFe';
 import { ModalFaturamentoNFCe } from '../components/vendas/ModalFaturamentoNFCe';
+import { ModalCancelarPedido } from '../components/vendas/ModalCancelarPedido';
 import {
   ModalPersonalizarColunasPedidos,
   ColunaTabelaPedido,
@@ -99,6 +104,7 @@ export const PedidosVendasPage: React.FC = () => {
   const [isModalFaturamentoNFCeOpen, setIsModalFaturamentoNFCeOpen] = useState(false);
   const [pedidoSelecionado, setPedidoSelecionado] = useState<PedidoVendaItem | null>(null);
   const [pedidoFaturamento, setPedidoFaturamento] = useState<PedidoVendaItem | null>(null);
+  const [pedidoCancelamento, setPedidoCancelamento] = useState<PedidoVendaItem | null>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -318,7 +324,8 @@ export const PedidosVendasPage: React.FC = () => {
   const pedidosFiltrados = useMemo(() => {
     return pedidos.filter((p) => {
       if (!p) return false;
-      if (tabStatus !== 'TODOS' && p.status !== tabStatus) return false;
+      const norm = normalizarStatusPedido(p.status);
+      if (tabStatus !== 'TODOS' && norm !== tabStatus) return false;
 
       if (busca) {
         const q = String(busca).toLowerCase().trim();
@@ -490,10 +497,12 @@ export const PedidosVendasPage: React.FC = () => {
         <div style={{ display: 'flex', backgroundColor: 'var(--surface-3)', borderRadius: '6px', padding: '2px', gap: '2px', flexWrap: 'wrap' }}>
           {[
             { key: 'TODOS', label: 'Todos os Pedidos' },
-            { key: 'ORCAMENTO', label: '🟡 Orçamentos (Em Aberto)' },
-            { key: 'APROVADO', label: '🔵 Pedidos Aprovados' },
-            { key: 'FATURADO', label: '🟢 Faturados (NF-e Emitida)' },
-            { key: 'CANCELADO', label: '🔴 Cancelados' },
+            { key: 'EM_ABERTO', label: '⬜ Em Aberto' },
+            { key: 'A_FATURAR', label: '🟩 A Faturar' },
+            { key: 'EM_FATURAMENTO', label: '🟨 Em Faturamento' },
+            { key: 'PROCESSADO', label: '⬛ Processados' },
+            { key: 'BLOQUEADO', label: '🟥 Bloqueados' },
+            { key: 'CANCELADO', label: '🟦 Cancelados' },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -505,7 +514,7 @@ export const PedidosVendasPage: React.FC = () => {
                 color: tabStatus === tab.key ? '#3b82f6' : 'var(--text-muted)',
                 fontSize: '11px',
                 fontWeight: 700,
-                padding: '6px 12px',
+                padding: '6px 10px',
                 borderRadius: '4px',
                 cursor: 'pointer',
               }}
@@ -550,6 +559,62 @@ export const PedidosVendasPage: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* PAINEL DE LEGENDA OFICIAL DE CORES DOS PEDIDOS */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          padding: '6px 12px',
+          backgroundColor: 'var(--surface-2)',
+          border: '1px solid var(--border-default)',
+          borderRadius: '6px',
+          fontSize: '11px',
+          flexWrap: 'wrap',
+          marginBottom: '8px',
+        }}
+      >
+        <span style={{ fontWeight: 800, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          🏷️ Legenda:
+        </span>
+
+        {[
+          { label: 'Em Aberto', bg: '#ffffff', border: '#94a3b8', text: '#334155' },
+          { label: 'A Faturar', bg: '#dcfce7', border: '#86efac', text: '#166534' },
+          { label: 'Em Faturamento', bg: '#fef08a', border: '#fde047', text: '#854d0e' },
+          { label: 'Processado', bg: '#64748b', border: '#475569', text: '#ffffff' },
+          { label: 'Bloqueado', bg: '#f87171', border: '#ef4444', text: '#ffffff' },
+          { label: 'Cancelado', bg: '#0070f3', border: '#2563eb', text: '#ffffff' },
+        ].map((leg) => (
+          <div
+            key={leg.label}
+            onClick={() => setTabStatus(leg.label.toUpperCase().replace(/\s+/g, '_') as any)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              cursor: 'pointer',
+              padding: '2px 4px',
+              borderRadius: '4px',
+            }}
+            title={`Filtrar por ${leg.label}`}
+          >
+            <span
+              style={{
+                width: '12px',
+                height: '12px',
+                borderRadius: '2px',
+                backgroundColor: leg.bg,
+                border: `1px solid ${leg.border}`,
+                display: 'inline-block',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+              }}
+            />
+            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{leg.label}</span>
+          </div>
+        ))}
       </div>
 
       {/* DICA DE ARRASTAR COLUNAS */}
@@ -674,27 +739,46 @@ export const PedidosVendasPage: React.FC = () => {
                         >
                           {(() => {
                             switch (col.id) {
-                              case 'numeroPedido':
+                              case 'numeroPedido': {
+                                const norm = normalizarStatusPedido(p.status);
+                                const cfg = getStatusConfig(norm);
                                 return (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleEditarPedido(p)}
-                                    style={{
-                                      background: 'none',
-                                      border: 'none',
-                                      cursor: 'pointer',
-                                      padding: 0,
-                                      fontWeight: 800,
-                                      color: 'var(--text-link, #2563eb)',
-                                      fontSize: '12px',
-                                      textDecoration: 'underline',
-                                      textAlign: 'left',
-                                    }}
-                                    title="Clique para entrar no pedido"
-                                  >
-                                    {p.numeroPedido}
-                                  </button>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    {/* Quadrado de Cor Oficial do Status */}
+                                    <span
+                                      style={{
+                                        width: '13px',
+                                        height: '13px',
+                                        borderRadius: '2px',
+                                        backgroundColor: cfg.bg,
+                                        border: `1px solid ${cfg.border}`,
+                                        display: 'inline-block',
+                                        flexShrink: 0,
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+                                      }}
+                                      title={`Status: ${cfg.label} - ${cfg.tooltip}`}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEditarPedido(p)}
+                                      style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        padding: 0,
+                                        fontWeight: 800,
+                                        color: 'var(--text-link, #2563eb)',
+                                        fontSize: '12px',
+                                        textDecoration: 'underline',
+                                        textAlign: 'left',
+                                      }}
+                                      title="Clique para entrar no pedido"
+                                    >
+                                      {p.numeroPedido}
+                                    </button>
+                                  </div>
                                 );
+                              }
                               case 'nfe': {
                                 const temNfe = !!p.chaveNFeEmitida;
                                 return temNfe ? (
@@ -834,32 +918,31 @@ export const PedidosVendasPage: React.FC = () => {
                               }
                               case 'itens':
                                 return <span style={{ fontWeight: 700 }}>{p.itens.length}</span>;
-                              case 'status':
+                              case 'status': {
+                                const norm = normalizarStatusPedido(p.status);
+                                const cfg = getStatusConfig(norm);
                                 return (
                                   <span
                                     style={{
-                                      fontSize: '10px',
-                                      fontWeight: 700,
+                                      fontSize: '10.5px',
+                                      fontWeight: 800,
                                       padding: '2px 8px',
                                       borderRadius: '4px',
-                                      backgroundColor:
-                                        p.status === 'FATURADO'
-                                          ? 'rgba(16, 185, 129, 0.15)'
-                                          : p.status === 'APROVADO'
-                                          ? 'rgba(59, 130, 246, 0.15)'
-                                          : 'rgba(234, 179, 8, 0.15)',
-                                      color:
-                                        p.status === 'FATURADO'
-                                          ? '#10b981'
-                                          : p.status === 'APROVADO'
-                                          ? '#3b82f6'
-                                          : '#eab308',
+                                      backgroundColor: cfg.bg,
+                                      border: `1px solid ${cfg.border}`,
+                                      color: cfg.text,
+                                      boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
                                     }}
+                                    title={cfg.tooltip}
                                   >
-                                    {p.status}
+                                    {cfg.label}
                                   </span>
                                 );
-                              case 'acoes':
+                              }
+                              case 'acoes': {
+                                const norm = normalizarStatusPedido(p.status);
+                                const isCancelled = norm === 'CANCELADO';
+
                                 return (
                                   <div style={{ display: 'flex', gap: '5px', justifyContent: 'center', alignItems: 'center' }}>
                                     {/* Imprimir A4 */}
@@ -1008,34 +1091,60 @@ export const PedidosVendasPage: React.FC = () => {
                                         alignItems: 'center',
                                         gap: '4px',
                                       }}
-                                      title="Abrir e Editar Pedido (F3)"
+                                      title="Abrir e Editar Pedido"
                                     >
                                       <Edit2 size={12} /> Abrir
                                     </button>
 
-                                    {/* Excluir */}
-                                    <button
-                                      type="button"
-                                      onClick={() => handleExcluir(p.id, p.numeroPedido)}
-                                      className="coliseu-btn"
-                                      style={{
-                                        padding: '0 8px',
-                                        height: '26px',
-                                        fontSize: '11px',
-                                        fontWeight: 600,
-                                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                                        color: '#dc2626',
-                                        border: '1px solid rgba(239, 68, 68, 0.3)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '3px',
-                                      }}
-                                      title={`Excluir Pedido Nº ${p.numeroPedido}`}
-                                    >
-                                      <Trash2 size={12} />
-                                    </button>
+                                    {/* Cancelar Pedido / Venda */}
+                                    {!isCancelled && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setPedidoCancelamento(p)}
+                                        className="coliseu-btn"
+                                        style={{
+                                          padding: '0 8px',
+                                          height: '26px',
+                                          fontSize: '11px',
+                                          fontWeight: 700,
+                                          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                          color: '#dc2626',
+                                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '3px',
+                                        }}
+                                        title={`Cancelar Pedido Nº ${p.numeroPedido} com estorno`}
+                                      >
+                                        <Ban size={12} /> Cancelar
+                                      </button>
+                                    )}
+
+                                    {/* Excluir (para orçamentos ou cancelados) */}
+                                    {(norm === 'EM_ABERTO' || norm === 'CANCELADO') && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleExcluir(p.id, p.numeroPedido)}
+                                        className="coliseu-btn"
+                                        style={{
+                                          padding: '0 7px',
+                                          height: '26px',
+                                          fontSize: '11px',
+                                          fontWeight: 600,
+                                          backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                                          color: '#dc2626',
+                                          border: '1px solid rgba(239, 68, 68, 0.25)',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                        }}
+                                        title={`Excluir Registro Nº ${p.numeroPedido}`}
+                                      >
+                                        <Trash2 size={12} />
+                                      </button>
+                                    )}
                                   </div>
                                 );
+                              }
                               default:
                                 return null;
                             }
@@ -1202,6 +1311,20 @@ export const PedidosVendasPage: React.FC = () => {
         onSalvarColunas={handleSalvarColunas}
         onRestaurarPadrao={handleRestaurarColunasPadrao}
       />
+
+      {/* Modal de Cancelamento Direto na Grade */}
+      {pedidoCancelamento && (
+        <ModalCancelarPedido
+          isOpen={!!pedidoCancelamento}
+          onClose={() => setPedidoCancelamento(null)}
+          pedido={pedidoCancelamento}
+          onCancelamentoConcluido={(atualizado) => {
+            showToast(`✅ Pedido Nº ${atualizado.numeroPedido} cancelado com sucesso.`);
+            setPedidos(getPedidosVenda());
+            setPedidoCancelamento(null);
+          }}
+        />
+      )}
     </div>
   );
 };

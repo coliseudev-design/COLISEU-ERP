@@ -2,10 +2,96 @@ import { gerarChaveAcessoNFe } from './nfeChaveAcesso';
 import { syncService } from './syncService';
 
 export type StatusPedidoVenda =
-  | 'ORCAMENTO'           // Proposta comercial em negociação
-  | 'APROVADO'            // Pedido de venda aprovado / pronto para separação
-  | 'FATURADO'            // Faturado (gerou NF-e / NFC-e e Títulos a Receber)
-  | 'CANCELADO';          // Cancelado
+  | 'EM_ABERTO'        // ⬜ Branco: Orçamento em aberto (não baixa estoque, não gera financeiro)
+  | 'A_FATURAR'         // 🟩 Verde Claro: Pedido aprovado pronto para faturamento/expedição
+  | 'EM_FATURAMENTO'    // 🟨 Amarelo: NF-e/NFC-e emitida na SEFAZ aguardando processar venda (bloqueia alteração)
+  | 'PROCESSADO'        // ⬛ Cinza: Venda finalizada (estoque baixado e financeiro gerado)
+  | 'BLOQUEADO'         // 🟥 Vermelho: Bloqueio comercial/financeiro
+  | 'CANCELADO'         // 🟦 Azul: Venda/Pedido cancelado com estorno
+  | 'ORCAMENTO'         // Alias legado para EM_ABERTO
+  | 'APROVADO'          // Alias legado para A_FATURAR
+  | 'FATURADO';         // Alias legado para PROCESSADO
+
+export interface StatusConfig {
+  label: string;
+  key: 'EM_ABERTO' | 'A_FATURAR' | 'EM_FATURAMENTO' | 'PROCESSADO' | 'BLOQUEADO' | 'CANCELADO';
+  bg: string;
+  border: string;
+  text: string;
+  tooltip: string;
+}
+
+export function normalizarStatusPedido(status?: string): 'EM_ABERTO' | 'A_FATURAR' | 'EM_FATURAMENTO' | 'PROCESSADO' | 'BLOQUEADO' | 'CANCELADO' {
+  if (!status) return 'EM_ABERTO';
+  const s = status.toUpperCase();
+  if (s === 'ORCAMENTO' || s === 'EM_ABERTO' || s === 'ABERTO') return 'EM_ABERTO';
+  if (s === 'APROVADO' || s === 'A_FATURAR' || s === 'LIBERADO') return 'A_FATURAR';
+  if (s === 'EM_FATURAMENTO' || s === 'FATURANDO') return 'EM_FATURAMENTO';
+  if (s === 'FATURADO' || s === 'PROCESSADO' || s === 'CONCLUIDO') return 'PROCESSADO';
+  if (s === 'BLOQUEADO') return 'BLOQUEADO';
+  if (s === 'CANCELADO') return 'CANCELADO';
+  return 'EM_ABERTO';
+}
+
+export function getStatusConfig(status?: string): StatusConfig {
+  const norm = normalizarStatusPedido(status);
+  switch (norm) {
+    case 'EM_ABERTO':
+      return {
+        key: 'EM_ABERTO',
+        label: 'Em Aberto',
+        bg: '#ffffff',
+        border: '#94a3b8',
+        text: '#334155',
+        tooltip: 'Orçamento salvo em aberto. Não baixou estoque nem gerou financeiro. Edição livre.',
+      };
+    case 'A_FATURAR':
+      return {
+        key: 'A_FATURAR',
+        label: 'A Faturar',
+        bg: '#dcfce7',
+        border: '#86efac',
+        text: '#166534',
+        tooltip: 'Pedido aprovado, pronto para emissão fiscal ou faturamento.',
+      };
+    case 'EM_FATURAMENTO':
+      return {
+        key: 'EM_FATURAMENTO',
+        label: 'Em Faturamento',
+        bg: '#fef08a',
+        border: '#fde047',
+        text: '#854d0e',
+        tooltip: 'Nota fiscal (NF-e/NFC-e) já vinculada. Edição de dados bloqueada até processar a venda.',
+      };
+    case 'PROCESSADO':
+      return {
+        key: 'PROCESSADO',
+        label: 'Processado',
+        bg: '#64748b',
+        border: '#475569',
+        text: '#ffffff',
+        tooltip: 'Venda finalizada (estoque baixado e financeiro gerado). Bloqueado para reprocessar.',
+      };
+    case 'BLOQUEADO':
+      return {
+        key: 'BLOQUEADO',
+        label: 'Bloqueado',
+        bg: '#f87171',
+        border: '#ef4444',
+        text: '#ffffff',
+        tooltip: 'Pedido retido por limite de crédito ou pendência comercial.',
+      };
+    case 'CANCELADO':
+      return {
+        key: 'CANCELADO',
+        label: 'Cancelado',
+        bg: '#0070f3',
+        border: '#2563eb',
+        text: '#ffffff',
+        tooltip: 'Venda cancelada no sistema (estoque e financeiro estornados).',
+      };
+  }
+}
 
 export type TipoMovimentoPedido = 'SAIDA' | 'ENTRADA';
 
@@ -640,4 +726,224 @@ export function cancelarNotaFiscalPedido(
 
   salvarPedidoVenda(ped);
   return ped;
+}
+
+/**
+ * Salva o pedido como Orçamento Comercial (Status EM_ABERTO - ⬜ Branco)
+ */
+export function salvarOrcamento(pedido: PedidoVendaItem): PedidoVendaItem {
+  pedido.status = 'EM_ABERTO';
+  salvarPedidoVenda(pedido);
+  return pedido;
+}
+
+/**
+ * Aprova o pedido comercialmente (Status A_FATURAR - 🟩 Verde Claro)
+ */
+export function aprovarPedidoComercial(pedidoId: string): PedidoVendaItem | null {
+  const lista = getPedidosVenda();
+  const index = lista.findIndex((p) => p.id === pedidoId || p.numeroPedido === pedidoId);
+  if (index < 0) return null;
+
+  const ped = { ...lista[index] };
+  ped.status = 'A_FATURAR';
+  salvarPedidoVenda(ped);
+  return ped;
+}
+
+/**
+ * Processamento Completo da Venda (Status PROCESSADO - ⬛ Cinza)
+ * 1. Baixa estoque
+ * 2. Lança contas a receber no financeiro
+ * 3. Registra data de faturamento
+ * 4. Bloqueia reprocessamento acidental
+ */
+export function processarVendaCompleta(pedidoId: string): {
+  success: boolean;
+  message: string;
+  pedido?: PedidoVendaItem;
+} {
+  const lista = getPedidosVenda();
+  const index = lista.findIndex((p) => p.id === pedidoId || p.numeroPedido === pedidoId);
+  if (index < 0) {
+    return { success: false, message: 'Pedido não encontrado.' };
+  }
+
+  const ped = { ...lista[index] };
+  if (ped.status === 'PROCESSADO' || ped.status === 'FATURADO') {
+    return {
+      success: false,
+      message: 'Esta venda já foi processada e finalizada. Cancele a venda para permitir alterações.',
+      pedido: ped,
+    };
+  }
+
+  // 1. Baixa de estoque dos itens
+  try {
+    const rawEstoque = localStorage.getItem('coliseu_produtos_estoque_v1');
+    if (rawEstoque) {
+      const produtos = JSON.parse(rawEstoque);
+      if (Array.isArray(produtos)) {
+        ped.itens.forEach((it) => {
+          const prod = produtos.find((pr: any) => pr.id === it.produtoId || pr.codigo === it.codigoInterno);
+          if (prod) {
+            prod.estoque = Math.max(0, (prod.estoque || 0) - it.quantidade);
+          }
+        });
+        localStorage.setItem('coliseu_produtos_estoque_v1', JSON.stringify(produtos));
+      }
+    }
+  } catch (err) {
+    console.warn('[Estoque] Aviso ao baixar estoque:', err);
+  }
+
+  // 2. Lançamento no Contas a Receber (Financeiro)
+  try {
+    const rawFin = localStorage.getItem('coliseu_titulos_receber_v1');
+    const titulos = rawFin ? JSON.parse(rawFin) : [];
+    if (Array.isArray(titulos)) {
+      if (ped.parcelas && ped.parcelas.length > 0) {
+        ped.parcelas.forEach((parc, pIdx) => {
+          titulos.push({
+            id: `rec-${ped.numeroPedido}-${pIdx + 1}`,
+            pedidoId: ped.id,
+            numeroDocumento: parc.numeroDocumento || `${ped.numeroPedido}/${pIdx + 1}`,
+            clienteNome: ped.clienteNome,
+            clienteCnpjCpf: ped.clienteCnpjCpf,
+            dataEmissao: ped.dataEmissao,
+            dataVencimento: parc.dataVencimento,
+            valor: parc.valorParcela,
+            especie: parc.especiePagamento,
+            status: 'PENDENTE',
+          });
+        });
+      } else {
+        titulos.push({
+          id: `rec-${ped.numeroPedido}-1`,
+          pedidoId: ped.id,
+          numeroDocumento: `${ped.numeroPedido}/01`,
+          clienteNome: ped.clienteNome,
+          clienteCnpjCpf: ped.clienteCnpjCpf,
+          dataEmissao: ped.dataEmissao,
+          dataVencimento: new Date().toLocaleDateString('pt-BR'),
+          valor: ped.valorTotalFinal,
+          especie: ped.formaPagamentoNome || 'BOLETO BANCARIO',
+          status: 'PENDENTE',
+        });
+      }
+      localStorage.setItem('coliseu_titulos_receber_v1', JSON.stringify(titulos));
+    }
+  } catch (err) {
+    console.warn('[Financeiro] Aviso ao lançar títulos:', err);
+  }
+
+  // 3. Atualizar estado do Pedido
+  ped.status = 'PROCESSADO';
+  ped.dataFaturamento = new Date().toLocaleDateString('pt-BR');
+  salvarPedidoVenda(ped);
+
+  return {
+    success: true,
+    message: `Venda Nº ${ped.numeroPedido} processada com sucesso! Estoque e financeiro lançados.`,
+    pedido: ped,
+  };
+}
+
+/**
+ * Cancelamento de Venda / Pedido (Status CANCELADO - 🟦 Azul Vivo)
+ * 1. Estorna estoque dos itens
+ * 2. Cancela títulos a receber no módulo financeiro
+ * 3. Registra motivo do cancelamento
+ */
+export function cancelarPedidoVenda(
+  pedidoId: string,
+  motivo = 'Cancelamento solicitado pelo operador'
+): {
+  success: boolean;
+  message: string;
+  pedido?: PedidoVendaItem;
+} {
+  const lista = getPedidosVenda();
+  const index = lista.findIndex((p) => p.id === pedidoId || p.numeroPedido === pedidoId);
+  if (index < 0) {
+    return { success: false, message: 'Pedido não encontrado.' };
+  }
+
+  const ped = { ...lista[index] };
+
+  // 1. Estorno de Estoque
+  try {
+    const rawEstoque = localStorage.getItem('coliseu_produtos_estoque_v1');
+    if (rawEstoque) {
+      const produtos = JSON.parse(rawEstoque);
+      if (Array.isArray(produtos)) {
+        ped.itens.forEach((it) => {
+          const prod = produtos.find((pr: any) => pr.id === it.produtoId || pr.codigo === it.codigoInterno);
+          if (prod) {
+            prod.estoque = (prod.estoque || 0) + it.quantidade;
+          }
+        });
+        localStorage.setItem('coliseu_produtos_estoque_v1', JSON.stringify(produtos));
+      }
+    }
+  } catch (err) {
+    console.warn('[Estoque] Aviso ao estornar estoque:', err);
+  }
+
+  // 2. Cancelamento de Títulos no Financeiro
+  try {
+    const rawFin = localStorage.getItem('coliseu_titulos_receber_v1');
+    if (rawFin) {
+      const titulos = JSON.parse(rawFin);
+      if (Array.isArray(titulos)) {
+        const atualizados = titulos.map((t: any) => {
+          if (t.pedidoId === ped.id || (typeof t.id === 'string' && t.id.startsWith(`rec-${ped.numeroPedido}`))) {
+            return { ...t, status: 'CANCELADO', motivoCancelamento: motivo };
+          }
+          return t;
+        });
+        localStorage.setItem('coliseu_titulos_receber_v1', JSON.stringify(atualizados));
+      }
+    }
+  } catch (err) {
+    console.warn('[Financeiro] Aviso ao cancelar títulos:', err);
+  }
+
+  // 3. Atualizar status
+  ped.status = 'CANCELADO';
+  ped.observacoesGerais = `${ped.observacoesGerais || ''} [Venda Cancelada em ${new Date().toLocaleString('pt-BR')}: ${motivo}]`.trim();
+  salvarPedidoVenda(ped);
+
+  return {
+    success: true,
+    message: `Venda Nº ${ped.numeroPedido} cancelada com sucesso! Estoque e financeiro estornados.`,
+    pedido: ped,
+  };
+}
+
+/**
+ * Reabre um pedido cancelado ou processado para o estado EM_ABERTO (⬜ Branco)
+ * permitindo ao operador corrigir dados e reprocessar.
+ */
+export function reabrirPedidoParaEdicao(pedidoId: string): {
+  success: boolean;
+  message: string;
+  pedido?: PedidoVendaItem;
+} {
+  const lista = getPedidosVenda();
+  const index = lista.findIndex((p) => p.id === pedidoId || p.numeroPedido === pedidoId);
+  if (index < 0) {
+    return { success: false, message: 'Pedido não encontrado.' };
+  }
+
+  const ped = { ...lista[index] };
+  ped.status = 'EM_ABERTO';
+  ped.observacoesGerais = `${ped.observacoesGerais || ''} [Reaberto para Edição em ${new Date().toLocaleString('pt-BR')}]`.trim();
+  salvarPedidoVenda(ped);
+
+  return {
+    success: true,
+    message: `Pedido Nº ${ped.numeroPedido} reaberto com sucesso como Orçamento em Aberto!`,
+    pedido: ped,
+  };
 }

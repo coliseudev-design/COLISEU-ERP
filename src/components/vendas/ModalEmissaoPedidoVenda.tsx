@@ -31,12 +31,19 @@ import {
   NATUREZAS_OPERACAO_PADRAO,
   MOCK_PRODUTOS_BUSCA_UNIVERSAL,
   salvarPedidoVenda,
-  faturarPedidoDireto,
+  salvarOrcamento,
+  processarVendaCompleta,
+  cancelarPedidoVenda,
+  reabrirPedidoParaEdicao,
+  getStatusConfig,
+  normalizarStatusPedido,
+  StatusPedidoVenda,
 } from '../../lib/pedidosVenda';
 import { getNaturezasAtivasParaVenda } from '../../lib/naturezasOperacao';
 import { ModalBuscaClientes, ClienteItemBusca } from './ModalBuscaClientes';
 import { ModalFaturamentoNFe } from './ModalFaturamentoNFe';
 import { ModalFaturamentoNFCe } from './ModalFaturamentoNFCe';
+import { ModalCancelarPedido } from './ModalCancelarPedido';
 
 interface ModalEmissaoPedidoVendaProps {
   isOpen: boolean;
@@ -98,24 +105,35 @@ export const ModalEmissaoPedidoVenda: React.FC<ModalEmissaoPedidoVendaProps> = (
   const [isModalBuscaClientesOpen, setIsModalBuscaClientesOpen] = useState(false);
   const [isModalFaturamentoOpen, setIsModalFaturamentoOpen] = useState(false);
   const [isModalFaturamentoNFCeOpen, setIsModalFaturamentoNFCeOpen] = useState(false);
+  const [isModalCancelarOpen, setIsModalCancelarOpen] = useState(false);
+
+  // Status & Regras de Bloqueio
+  const normStatus = normalizarStatusPedido(status);
+  const statusCfg = getStatusConfig(normStatus);
+  const isEmFaturamento = normStatus === 'EM_FATURAMENTO';
+  const isProcessado = normStatus === 'PROCESSADO';
+  const isCancelado = normStatus === 'CANCELADO';
+  const isBloqueadoEdicao = isEmFaturamento || isProcessado || isCancelado;
 
   // Refs de Navegação por Teclado
   const buscaInputRef = useRef<HTMLInputElement>(null);
   const qtdInputRef = useRef<HTMLInputElement>(null);
   const descontoInputRef = useRef<HTMLInputElement>(null);
 
-  // Atalhos de Teclado (F2, F3, F4, F6, F7, F8, F9)
+  // Atalhos de Teclado (F2, F3, F4, F5, F6, F7, F8, F9)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (isModalBuscaClientesOpen || isModalFaturamentoOpen || isModalFaturamentoNFCeOpen) return;
+      if (isModalBuscaClientesOpen || isModalFaturamentoOpen || isModalFaturamentoNFCeOpen || isModalCancelarOpen) return;
 
       if (e.key === 'F8') {
         e.preventDefault();
-        setIsModalBuscaClientesOpen(true);
+        if (!isBloqueadoEdicao) setIsModalBuscaClientesOpen(true);
       } else if (e.key === 'F9') {
         e.preventDefault();
-        buscaInputRef.current?.focus();
-        buscaInputRef.current?.select();
+        if (!isBloqueadoEdicao) {
+          buscaInputRef.current?.focus();
+          buscaInputRef.current?.select();
+        }
       } else if (e.key === 'F2') {
         e.preventDefault();
         handleAbrirFaturamentoNFe();
@@ -125,12 +143,15 @@ export const ModalEmissaoPedidoVenda: React.FC<ModalEmissaoPedidoVendaProps> = (
       } else if (e.key === 'F3') {
         e.preventDefault();
         handleLimparNovo();
+      } else if (e.key === 'F5') {
+        e.preventDefault();
+        handleSalvarOrcamento();
       } else if (e.key === 'F6') {
         e.preventDefault();
         handleImprimir();
       } else if (e.key === 'F7') {
         e.preventDefault();
-        handleSalvarPedido('APROVADO');
+        handleConfirmarVenda();
       } else if (e.key === 'Escape') {
         onClose();
       }
@@ -371,16 +392,50 @@ export const ModalEmissaoPedidoVenda: React.FC<ModalEmissaoPedidoVendaProps> = (
     };
   };
 
-  const handleSalvarPedido = (novoStatus?: any) => {
+  const handleSalvarOrcamento = () => {
+    if (isBloqueadoEdicao && !isCancelado) {
+      alert('Não é possível alterar este pedido pois ele já está em faturamento ou processado.');
+      return;
+    }
     if (itens.length === 0) {
       alert('Adicione ao menos um produto no pedido.');
       return;
     }
 
-    const pedido = montarObjetoPedido(novoStatus);
-    salvarPedidoVenda(pedido);
+    const pedido = montarObjetoPedido('EM_ABERTO');
+    salvarOrcamento(pedido);
     onSaveSuccess(pedido);
     onClose();
+  };
+
+  const handleConfirmarVenda = () => {
+    if (isProcessado) {
+      alert('Esta venda já foi processada e finalizada. Cancele a venda para permitir alterações.');
+      return;
+    }
+    if (itens.length === 0) {
+      alert('Adicione ao menos um produto no pedido.');
+      return;
+    }
+
+    const pedido = montarObjetoPedido('PROCESSADO');
+    salvarPedidoVenda(pedido);
+    const res = processarVendaCompleta(pedido.id);
+    if (res.success && res.pedido) {
+      onSaveSuccess(res.pedido);
+      onClose();
+    } else {
+      alert(res.message || 'Erro ao processar a venda.');
+    }
+  };
+
+  const handleReabrirParaEdicao = () => {
+    if (!pedidoEdicao) return;
+    const res = reabrirPedidoParaEdicao(pedidoEdicao.id);
+    if (res.success && res.pedido) {
+      setStatus('EM_ABERTO');
+      onSaveSuccess(res.pedido);
+    }
   };
 
   const handleAbrirFaturamentoNFe = () => {
@@ -456,7 +511,7 @@ export const ModalEmissaoPedidoVenda: React.FC<ModalEmissaoPedidoVendaProps> = (
           overflow: 'hidden',
         }}
       >
-        {/* BARRA SUPERIOR EXECUTIVA */}
+        {/* BARRA SUPERIOR EXECUTIVA COM QUADRADO DE STATUS OFICIAL */}
         <div
           style={{
             padding: '10px 16px',
@@ -474,28 +529,36 @@ export const ModalEmissaoPedidoVenda: React.FC<ModalEmissaoPedidoVendaProps> = (
                 <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)' }}>
                   EMISSÃO DE PEDIDOS & ORÇAMENTOS
                 </span>
-                <span
+
+                {/* Quadrado e Badge de Status Oficial */}
+                <div
                   style={{
-                    fontSize: '10px',
-                    fontWeight: 700,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
                     padding: '2px 8px',
                     borderRadius: '4px',
-                    backgroundColor:
-                      status === 'FATURADO'
-                        ? 'rgba(16, 185, 129, 0.15)'
-                        : status === 'APROVADO'
-                        ? 'rgba(59, 130, 246, 0.15)'
-                        : 'rgba(234, 179, 8, 0.15)',
-                    color:
-                      status === 'FATURADO'
-                        ? '#10b981'
-                        : status === 'APROVADO'
-                        ? '#3b82f6'
-                        : '#eab308',
+                    backgroundColor: statusCfg.bg,
+                    border: `1px solid ${statusCfg.border}`,
+                    color: statusCfg.text,
+                    fontSize: '11px',
+                    fontWeight: 800,
                   }}
+                  title={statusCfg.tooltip}
                 >
-                  {status}
-                </span>
+                  <span
+                    style={{
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '2px',
+                      backgroundColor: statusCfg.bg,
+                      border: `1px solid ${statusCfg.border}`,
+                      display: 'inline-block',
+                      boxShadow: '0 0 0 1px rgba(0,0,0,0.1)',
+                    }}
+                  />
+                  {statusCfg.label}
+                </div>
               </div>
               <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
                 Nº Pedido: <strong>{numeroPedido}</strong> • Depto: <strong>{filialDepto}</strong> • Emissão: <strong>{dataEmissao}</strong>
@@ -505,15 +568,19 @@ export const ModalEmissaoPedidoVenda: React.FC<ModalEmissaoPedidoVendaProps> = (
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <select
-              value={status}
+              value={normStatus}
               onChange={(e) => setStatus(e.target.value as any)}
+              disabled={isBloqueadoEdicao}
               className="coliseu-input"
               style={{ height: '30px', fontSize: '11px', fontWeight: 700 }}
+              title={isBloqueadoEdicao ? 'Status controlado pelo fluxo fiscal / comercial' : 'Alterar status comercial'}
             >
-              <option value="ORCAMENTO">STATUS: ORÇAMENTO</option>
-              <option value="APROVADO">STATUS: PEDIDO APROVADO</option>
-              <option value="FATURADO">STATUS: FATURADO</option>
-              <option value="CANCELADO">STATUS: CANCELADO</option>
+              <option value="EM_ABERTO">⬜ EM ABERTO (ORÇAMENTO)</option>
+              <option value="A_FATURAR">🟩 A FATURAR (APROVADO)</option>
+              <option value="EM_FATURAMENTO">🟨 EM FATURAMENTO (NF-E VINCULADA)</option>
+              <option value="PROCESSADO">⬛ PROCESSADO (CONCLUÍDO)</option>
+              <option value="BLOQUEADO">🟥 BLOQUEADO</option>
+              <option value="CANCELADO">🟦 CANCELADO</option>
             </select>
 
             <button
@@ -525,6 +592,97 @@ export const ModalEmissaoPedidoVenda: React.FC<ModalEmissaoPedidoVendaProps> = (
             </button>
           </div>
         </div>
+
+        {/* BANNERS DE STATUS E BLOQUEIO */}
+        {isEmFaturamento && (
+          <div
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#fef9c3',
+              borderBottom: '1px solid #fde047',
+              color: '#854d0e',
+              fontSize: '11.5px',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '14px' }}>🟨</span>
+              <span>
+                <strong>EM FATURAMENTO:</strong> Este pedido possui Nota Fiscal (NF-e/NFC-e) vinculada e autorizada na SEFAZ. Os dados de produtos e valores estão bloqueados para garantir conformidade fiscal.
+              </span>
+            </div>
+            <div style={{ fontSize: '11px', fontStyle: 'italic' }}>
+              Ação necessária: Clique em "Confirmar Venda (F7)" para processar a baixa ou "Cancelar Venda" para estornar.
+            </div>
+          </div>
+        )}
+
+        {isProcessado && (
+          <div
+            style={{
+              padding: '8px 16px',
+              backgroundColor: 'rgba(100, 116, 139, 0.12)',
+              borderBottom: '1px solid rgba(100, 116, 139, 0.3)',
+              color: 'var(--text-primary)',
+              fontSize: '11.5px',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '14px' }}>⬛</span>
+              <span>
+                <strong>VENDA PROCESSADA:</strong> O estoque já foi baixado e o financeiro foi lançado em contas a receber. O botão de confirmação está bloqueado para evitar duplicação.
+              </span>
+            </div>
+            <Button
+              variant="danger"
+              size="sm"
+              type="button"
+              onClick={() => setIsModalCancelarOpen(true)}
+              style={{ height: '26px', fontSize: '11px', fontWeight: 700 }}
+            >
+              🚫 Cancelar Venda & Estornar
+            </Button>
+          </div>
+        )}
+
+        {isCancelado && (
+          <div
+            style={{
+              padding: '8px 16px',
+              backgroundColor: 'rgba(0, 112, 243, 0.1)',
+              borderBottom: '1px solid rgba(0, 112, 243, 0.3)',
+              color: '#0070f3',
+              fontSize: '11.5px',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '14px' }}>🟦</span>
+              <span>
+                <strong>PEDIDO CANCELADO:</strong> Esta venda foi cancelada e os estoques/títulos foram estornados.
+              </span>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              type="button"
+              onClick={handleReabrirParaEdicao}
+              style={{ height: '26px', fontSize: '11px', fontWeight: 700, borderColor: '#0070f3', color: '#0070f3' }}
+            >
+              🔄 Reabrir Orçamento em Aberto
+            </Button>
+          </div>
+        )}
 
         {/* CORPO DO PEDIDO */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -989,36 +1147,105 @@ export const ModalEmissaoPedidoVenda: React.FC<ModalEmissaoPedidoVendaProps> = (
           }}
         >
           {/* Atalhos Rápidos */}
-          <div style={{ display: 'flex', gap: '6px' }}>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             <Button variant="secondary" size="sm" type="button" onClick={handleLimparNovo} title="Novo Pedido (F3)">
               Novo (F3)
             </Button>
             <Button variant="secondary" size="sm" type="button" onClick={handleImprimir} leftIcon={<Printer size={13} />} title="Imprimir Orçamento A4 (F6)">
               Imprimir A4 (F6)
             </Button>
-            <Button variant="secondary" size="sm" type="button" onClick={handleAbrirFaturamentoNFe} leftIcon={<FileCheck size={13} />} style={{ color: '#3b82f6', fontWeight: 700 }} title="Faturar e Emitir NF-e Mod. 55 (F2)">
+            <Button
+              variant="secondary"
+              size="sm"
+              type="button"
+              onClick={handleAbrirFaturamentoNFe}
+              leftIcon={<FileCheck size={13} />}
+              style={{ color: '#3b82f6', fontWeight: 700 }}
+              title="Faturar e Emitir NF-e Mod. 55 (F2)"
+            >
               Emitir NFE (F2)
             </Button>
-            <Button variant="secondary" size="sm" type="button" onClick={handleAbrirFaturamentoNFCe} leftIcon={<Receipt size={13} />} style={{ color: '#10b981', fontWeight: 700 }} title="Emitir Cupom Fiscal NFC-e Mod. 65 (F4)">
+            <Button
+              variant="secondary"
+              size="sm"
+              type="button"
+              onClick={handleAbrirFaturamentoNFCe}
+              leftIcon={<Receipt size={13} />}
+              style={{ color: '#10b981', fontWeight: 700 }}
+              title="Emitir Cupom Fiscal NFC-e Mod. 65 (F4)"
+            >
               Emitir NFCe (F4)
             </Button>
           </div>
 
           {/* Ações Principais */}
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <Button variant="secondary" type="button" onClick={onClose}>
               Fechar (ESC)
             </Button>
+
+            {/* Salvar Orçamento (F5) */}
             <Button
-              variant="primary"
+              variant="secondary"
               type="button"
-              onClick={() => handleSalvarPedido('APROVADO')}
-              style={{ backgroundColor: '#10b981', borderColor: '#10b981' }}
-              leftIcon={<Save size={15} />}
-              title="Confirmar Pedido & Faturar (F7)"
+              onClick={handleSalvarOrcamento}
+              disabled={isBloqueadoEdicao && !isCancelado}
+              leftIcon={<Save size={14} />}
+              style={{ fontWeight: 700 }}
+              title="Salvar apenas como Orçamento em Aberto (F5)"
             >
-              Confirmar Venda (F7)
+              Salvar Orçamento (F5)
             </Button>
+
+            {/* Botão de Cancelar Venda para pedidos Processados ou em Faturamento */}
+            {(isProcessado || isEmFaturamento) && (
+              <Button
+                variant="danger"
+                type="button"
+                onClick={() => setIsModalCancelarOpen(true)}
+                style={{ backgroundColor: '#ef4444', borderColor: '#ef4444', color: '#fff', fontWeight: 700 }}
+                title="Cancelar a venda e estornar estoque/financeiro"
+              >
+                🚫 Cancelar Venda
+              </Button>
+            )}
+
+            {/* Botão de Reabrir Orçamento para pedidos Cancelados */}
+            {isCancelado && (
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={handleReabrirParaEdicao}
+                style={{ borderColor: '#0070f3', color: '#0070f3', fontWeight: 700 }}
+                title="Reabrir este pedido como Orçamento em Aberto"
+              >
+                🔄 Reabrir Orçamento
+              </Button>
+            )}
+
+            {/* Confirmar Venda / Processar (F7) */}
+            {isProcessado ? (
+              <Button
+                variant="secondary"
+                type="button"
+                disabled
+                style={{ opacity: 0.6, cursor: 'not-allowed', fontWeight: 700 }}
+                title="Esta venda já foi processada e finalizada. Cancele a venda caso precise alterar."
+              >
+                🔒 Venda Processada (F7)
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                type="button"
+                onClick={handleConfirmarVenda}
+                style={{ backgroundColor: '#10b981', borderColor: '#10b981', fontWeight: 700 }}
+                leftIcon={<Save size={15} />}
+                title="Processar Venda, Baixar Estoque & Lançar no Financeiro (F7)"
+              >
+                Confirmar Venda (F7)
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -1037,9 +1264,10 @@ export const ModalEmissaoPedidoVenda: React.FC<ModalEmissaoPedidoVendaProps> = (
         <ModalFaturamentoNFe
           isOpen={isModalFaturamentoOpen}
           onClose={() => setIsModalFaturamentoOpen(false)}
-          pedido={montarObjetoPedido('FATURADO')}
+          pedido={montarObjetoPedido('EM_FATURAMENTO')}
           onFaturamentoConcluido={(faturado) => {
-            setStatus('FATURADO');
+            setStatus('EM_FATURAMENTO');
+            faturado.status = 'EM_FATURAMENTO';
             salvarPedidoVenda(faturado);
             onSaveSuccess(faturado);
           }}
@@ -1051,11 +1279,26 @@ export const ModalEmissaoPedidoVenda: React.FC<ModalEmissaoPedidoVendaProps> = (
         <ModalFaturamentoNFCe
           isOpen={isModalFaturamentoNFCeOpen}
           onClose={() => setIsModalFaturamentoNFCeOpen(false)}
-          pedido={montarObjetoPedido('FATURADO')}
+          pedido={montarObjetoPedido('EM_FATURAMENTO')}
           onFaturamentoConcluido={(faturado) => {
-            setStatus('FATURADO');
+            setStatus('EM_FATURAMENTO');
+            faturado.status = 'EM_FATURAMENTO';
             salvarPedidoVenda(faturado);
             onSaveSuccess(faturado);
+          }}
+        />
+      )}
+
+      {/* Modal de Cancelamento de Pedido com Estorno */}
+      {isModalCancelarOpen && (
+        <ModalCancelarPedido
+          isOpen={isModalCancelarOpen}
+          onClose={() => setIsModalCancelarOpen(false)}
+          pedido={pedidoEdicao || montarObjetoPedido()}
+          onCancelamentoConcluido={(cancelado) => {
+            setStatus('CANCELADO');
+            onSaveSuccess(cancelado);
+            setIsModalCancelarOpen(false);
           }}
         />
       )}
