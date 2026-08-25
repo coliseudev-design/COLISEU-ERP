@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../ui/Button';
-import { formatCurrency } from '../../lib/formatters';
+import { formatCurrency, maskCpfCnpj } from '../../lib/formatters';
 import {
   Receipt,
   X,
@@ -465,9 +465,12 @@ export const ModalFaturamentoNFCe: React.FC<ModalFaturamentoNFCeProps> = ({
                   <input
                     type="text"
                     value={cpfCnpjConsumidor}
-                    onChange={(e) => setCpfCnpjConsumidor(e.target.value)}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, '');
+                      setCpfCnpjConsumidor(maskCpfCnpj(e.target.value, digits.length > 11 ? 'JURÍDICA' : 'FÍSICA'));
+                    }}
                     placeholder="000.000.000-00"
-                    className="coliseu-input"
+                    className="coliseu-input text-mono"
                     style={{ width: '100%', height: '34px', fontWeight: 700 }}
                   />
                 </div>

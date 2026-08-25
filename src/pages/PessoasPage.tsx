@@ -37,7 +37,7 @@ import {
   Globe,
   Loader2,
 } from 'lucide-react';
-import { formatCnpjCpf, formatCurrency, parseNumber } from '../lib/formatters';
+import { formatCnpjCpf, formatCurrency, parseNumber, maskCpfCnpj, validarCpfCnpj } from '../lib/formatters';
 
 export type TipoParceiro =
   | 'CLIENTE'
@@ -743,6 +743,7 @@ export const PessoasPage: React.FC = () => {
   const [formNome, setFormNome] = useState('');
   const [formNomeAbrev, setFormNomeAbrev] = useState('');
   const [formCpfCnpj, setFormCpfCnpj] = useState('');
+  const [formPermitirDocLivre, setFormPermitirDocLivre] = useState(false);
   const [formRg, setFormRg] = useState('');
   const [formOrgEmis, setFormOrgEmis] = useState('SSP');
   const [formEmissaoRg, setFormEmissaoRg] = useState('');
@@ -896,6 +897,7 @@ export const PessoasPage: React.FC = () => {
     setFormNome('');
     setFormNomeAbrev('');
     setFormCpfCnpj('');
+    setFormPermitirDocLivre(false);
     setFormRg('');
     setFormOrgEmis('SSP');
     setFormEmissaoRg('');
@@ -962,6 +964,8 @@ export const PessoasPage: React.FC = () => {
     setFormNome(p.nome || '');
     setFormNomeAbrev(p.nomeAbrev || '');
     setFormCpfCnpj(p.cpfCnpj || '');
+    const docOk = validarCpfCnpj(p.cpfCnpj, p.tipoPessoa || 'JURÍDICA');
+    setFormPermitirDocLivre(!docOk && !!p.cpfCnpj);
     setFormRg(p.rg || '');
     setFormOrgEmis(p.orgEmis || 'SSP');
     setFormEmissaoRg(p.emissaoRg || '');
@@ -1023,6 +1027,17 @@ export const PessoasPage: React.FC = () => {
     if (!formNome.trim() || !formCpfCnpj.trim()) {
       showToast('⚠️ Preencha os campos obrigatórios: Nome/Razão Social e CPF/CNPJ.');
       return;
+    }
+
+    // Validação Fiscal Brasileira Oficial (Receita Federal)
+    if (!formPermitirDocLivre) {
+      const isValido = validarCpfCnpj(formCpfCnpj, formTipoPessoa);
+      if (!isValido) {
+        showToast(
+          `⚠️ O ${formTipoPessoa === 'JURÍDICA' ? 'CNPJ' : 'CPF'} informado (${formCpfCnpj}) é inválido perante as regras da Receita Federal. Corrija os dígitos ou marque a opção 'Permitir qualquer número'.`
+        );
+        return;
+      }
     }
 
     const limVal = parseNumber(formLimiteCredito);
@@ -1584,9 +1599,14 @@ export const PessoasPage: React.FC = () => {
                     <div>
                       <label className="coliseu-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
                         <span>{formTipoPessoa === 'JURÍDICA' ? 'CNPJ *' : 'CPF *'}</span>
-                        {formTipoPessoa === 'JURÍDICA' && (
+                        {formTipoPessoa === 'JURÍDICA' && !formPermitirDocLivre && (
                           <span style={{ fontSize: '11px', color: 'var(--action-primary)', fontWeight: 600 }}>
                             Consulta Automática RFB
+                          </span>
+                        )}
+                        {!formPermitirDocLivre && (formTipoPessoa === 'JURÍDICA' ? formCpfCnpj.replace(/\D/g, '').length === 14 : formCpfCnpj.replace(/\D/g, '').length === 11) && (
+                          <span style={{ fontSize: '11px', fontWeight: 700, color: validarCpfCnpj(formCpfCnpj, formTipoPessoa) ? 'var(--status-success)' : 'var(--status-danger)' }}>
+                            {validarCpfCnpj(formCpfCnpj, formTipoPessoa) ? '✅ Válido' : '❌ Inválido (Dígitos Incorretos)'}
                           </span>
                         )}
                       </label>
@@ -1594,11 +1614,33 @@ export const PessoasPage: React.FC = () => {
                         <input
                           type="text"
                           required
-                          placeholder={formTipoPessoa === 'JURÍDICA' ? '00.000.000/0000-00' : '000.000.000-00'}
+                          placeholder={
+                            formPermitirDocLivre
+                              ? 'Qualquer número / Isento'
+                              : formTipoPessoa === 'JURÍDICA'
+                              ? '00.000.000/0000-00'
+                              : '000.000.000-00'
+                          }
                           value={formCpfCnpj}
-                          onChange={(e) => setFormCpfCnpj(e.target.value)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (formPermitirDocLivre) {
+                              setFormCpfCnpj(val);
+                            } else {
+                              setFormCpfCnpj(maskCpfCnpj(val, formTipoPessoa));
+                            }
+                          }}
                           className="coliseu-input text-mono"
-                          style={{ flex: 1, height: '38px' }}
+                          style={{
+                            flex: 1,
+                            height: '38px',
+                            borderColor:
+                              !formPermitirDocLivre && (formTipoPessoa === 'JURÍDICA' ? formCpfCnpj.replace(/\D/g, '').length === 14 : formCpfCnpj.replace(/\D/g, '').length === 11)
+                                ? validarCpfCnpj(formCpfCnpj, formTipoPessoa)
+                                  ? 'var(--status-success)'
+                                  : 'var(--status-danger)'
+                                : undefined,
+                          }}
                         />
                         {formTipoPessoa === 'JURÍDICA' && (
                           <Button
@@ -1614,6 +1656,20 @@ export const PessoasPage: React.FC = () => {
                           </Button>
                         )}
                       </div>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--text-muted)', marginTop: '5px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={formPermitirDocLivre}
+                          onChange={(e) => {
+                            setFormPermitirDocLivre(e.target.checked);
+                            if (!e.target.checked) {
+                              setFormCpfCnpj(maskCpfCnpj(formCpfCnpj, formTipoPessoa));
+                            }
+                          }}
+                          style={{ cursor: 'pointer' }}
+                        />
+                        <span>Permitir qualquer número / Isento (Sem validação de dígitos)</span>
+                      </label>
                     </div>
                   </div>
 

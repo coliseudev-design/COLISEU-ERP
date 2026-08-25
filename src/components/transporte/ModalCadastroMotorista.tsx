@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Button } from '../ui/Button';
 import { User, Save, X, AlertTriangle } from 'lucide-react';
 import { MotoristaItem, transporteService } from '../../lib/transporte';
+import { maskCpf } from '../../lib/formatters';
 
 interface ModalCadastroMotoristaProps {
   isOpen: boolean;
@@ -145,7 +146,7 @@ export const ModalCadastroMotorista: React.FC<ModalCadastroMotoristaProps> = ({
                 type="text"
                 className="coliseu-input"
                 value={cpf}
-                onChange={(e) => setCpf(e.target.value)}
+                onChange={(e) => setCpf(maskCpf(e.target.value))}
                 placeholder="000.000.000-00"
                 style={{ height: '34px', fontWeight: 700 }}
               />
