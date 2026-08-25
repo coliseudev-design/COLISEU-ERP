@@ -61,7 +61,7 @@ export const COLUNAS_PADRAO_PEDIDOS: ColunaTabelaPedido[] = [
   { id: 'naturezaOp', label: 'Natureza Op.', visible: true, width: '220px', minWidth: '180px', align: 'left' },
   { id: 'itens', label: 'Itens', visible: true, width: '65px', minWidth: '60px', align: 'center' },
   { id: 'status', label: 'Status', visible: true, width: '105px', minWidth: '95px', align: 'center' },
-  { id: 'acoes', label: 'Ações', visible: true, width: '240px', minWidth: '220px', align: 'center' },
+  { id: 'acoes', label: 'Ações', visible: true, width: '290px', minWidth: '275px', align: 'center' },
 ];
 
 export const PedidosVendasPage: React.FC = () => {
@@ -657,7 +657,12 @@ export const PedidosVendasPage: React.FC = () => {
                   const colunasVisiveis = colunas.filter((c) => c.visible);
 
                   return (
-                    <tr key={p.id} style={{ height: '36px' }}>
+                    <tr
+                      key={p.id}
+                      onDoubleClick={() => handleEditarPedido(p)}
+                      style={{ height: '38px', cursor: 'pointer' }}
+                      title="Clique duas vezes para abrir o pedido"
+                    >
                       {colunasVisiveis.map((col) => (
                         <td
                           key={col.id}
@@ -671,9 +676,24 @@ export const PedidosVendasPage: React.FC = () => {
                             switch (col.id) {
                               case 'numeroPedido':
                                 return (
-                                  <span style={{ fontWeight: 800, color: 'var(--text-link, #2563eb)', fontSize: '12px' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditarPedido(p)}
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      cursor: 'pointer',
+                                      padding: 0,
+                                      fontWeight: 800,
+                                      color: 'var(--text-link, #2563eb)',
+                                      fontSize: '12px',
+                                      textDecoration: 'underline',
+                                      textAlign: 'left',
+                                    }}
+                                    title="Clique para entrar no pedido"
+                                  >
                                     {p.numeroPedido}
-                                  </span>
+                                  </button>
                                 );
                               case 'nfe': {
                                 const temNfe = !!p.chaveNFeEmitida;
@@ -841,13 +861,13 @@ export const PedidosVendasPage: React.FC = () => {
                                 );
                               case 'acoes':
                                 return (
-                                  <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                                  <div style={{ display: 'flex', gap: '5px', justifyContent: 'center', alignItems: 'center' }}>
                                     {/* Imprimir A4 */}
                                     <button
                                       type="button"
                                       onClick={() => handleImprimirA4(p)}
                                       className="coliseu-btn coliseu-btn-secondary"
-                                      style={{ padding: '0 6px', height: '26px', fontSize: '11px' }}
+                                      style={{ padding: '0 7px', height: '26px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '3px' }}
                                       title="Imprimir Pedido / Orçamento A4"
                                     >
                                       <Printer size={12} /> A4
@@ -863,15 +883,18 @@ export const PedidosVendasPage: React.FC = () => {
                                             onClick={() => handleFaturarNFe(p)}
                                             className="coliseu-btn coliseu-btn-secondary"
                                             style={{
-                                              padding: '0 6px',
+                                              padding: '0 7px',
                                               height: '26px',
                                               fontSize: '11px',
                                               color: '#8b5cf6',
                                               borderColor: 'rgba(139, 92, 246, 0.4)',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: '3px',
                                             }}
                                             title="Emitir NF-e de Acobertamento (CFOP 5.929 / 6.929)"
                                           >
-                                            <FileCheck size={12} /> Acobertamento
+                                            <FileCheck size={12} /> Acobert.
                                           </button>
                                         );
                                       }
@@ -881,10 +904,18 @@ export const PedidosVendasPage: React.FC = () => {
                                             type="button"
                                             onClick={() => handleFaturarNFe(p)}
                                             className="coliseu-btn coliseu-btn-secondary"
-                                            style={{ padding: '0 6px', height: '26px', fontSize: '11px', color: '#3b82f6' }}
+                                            style={{
+                                              padding: '0 7px',
+                                              height: '26px',
+                                              fontSize: '11px',
+                                              color: '#3b82f6',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: '3px',
+                                            }}
                                             title="Emitir NF-e Mod. 55"
                                           >
-                                            <FileCheck size={12} /> Emitir NFE
+                                            <FileCheck size={12} /> NF-e
                                           </button>
                                         );
                                       }
@@ -894,7 +925,15 @@ export const PedidosVendasPage: React.FC = () => {
                                             type="button"
                                             onClick={() => handleFaturarNFe(p)}
                                             className="coliseu-btn coliseu-btn-secondary"
-                                            style={{ padding: '0 6px', height: '26px', fontSize: '11px', color: '#10b981' }}
+                                            style={{
+                                              padding: '0 7px',
+                                              height: '26px',
+                                              fontSize: '11px',
+                                              color: '#10b981',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: '3px',
+                                            }}
                                             title={`NF-e Nº ${p.numeroNFe || ''} Autorizada`}
                                           >
                                             <FileCheck size={12} /> Ver NF-e
@@ -913,10 +952,18 @@ export const PedidosVendasPage: React.FC = () => {
                                             type="button"
                                             onClick={() => handleFaturarNFCe(p)}
                                             className="coliseu-btn coliseu-btn-secondary"
-                                            style={{ padding: '0 6px', height: '26px', fontSize: '11px', color: '#10b981' }}
+                                            style={{
+                                              padding: '0 7px',
+                                              height: '26px',
+                                              fontSize: '11px',
+                                              color: '#10b981',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: '3px',
+                                            }}
                                             title="Emitir NFC-e Mod. 65 (Cupom Fiscal)"
                                           >
-                                            <Receipt size={12} /> Emitir NFCe
+                                            <Receipt size={12} /> NFC-e
                                           </button>
                                         );
                                       }
@@ -926,7 +973,15 @@ export const PedidosVendasPage: React.FC = () => {
                                             type="button"
                                             onClick={() => handleFaturarNFCe(p)}
                                             className="coliseu-btn coliseu-btn-secondary"
-                                            style={{ padding: '0 6px', height: '26px', fontSize: '11px', color: '#10b981' }}
+                                            style={{
+                                              padding: '0 7px',
+                                              height: '26px',
+                                              fontSize: '11px',
+                                              color: '#10b981',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: '3px',
+                                            }}
                                             title={`NFC-e Nº ${p.numeroNFCe || ''} Autorizada`}
                                           >
                                             <Receipt size={12} /> Ver NFC-e
@@ -936,24 +991,46 @@ export const PedidosVendasPage: React.FC = () => {
                                       return null;
                                     })()}
 
-                                    {/* Editar */}
+                                    {/* Entrar / Abrir Pedido */}
                                     <button
                                       type="button"
                                       onClick={() => handleEditarPedido(p)}
-                                      className="coliseu-btn coliseu-btn-secondary"
-                                      style={{ padding: '0 6px', height: '26px', fontSize: '11px' }}
-                                      title="Editar / Abrir Pedido"
+                                      className="coliseu-btn"
+                                      style={{
+                                        padding: '0 9px',
+                                        height: '26px',
+                                        fontSize: '11px',
+                                        fontWeight: 700,
+                                        backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                                        color: '#2563eb',
+                                        border: '1px solid rgba(59, 130, 246, 0.35)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                      }}
+                                      title="Abrir e Editar Pedido (F3)"
                                     >
-                                      <Edit2 size={12} />
+                                      <Edit2 size={12} /> Abrir
                                     </button>
 
                                     {/* Excluir */}
                                     <button
                                       type="button"
                                       onClick={() => handleExcluir(p.id, p.numeroPedido)}
-                                      className="coliseu-btn coliseu-btn-secondary"
-                                      style={{ padding: '0 6px', height: '26px', fontSize: '11px', color: '#ef4444' }}
-                                      title="Excluir"
+                                      className="coliseu-btn"
+                                      style={{
+                                        padding: '0 8px',
+                                        height: '26px',
+                                        fontSize: '11px',
+                                        fontWeight: 600,
+                                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                        color: '#dc2626',
+                                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '3px',
+                                      }}
+                                      title={`Excluir Pedido Nº ${p.numeroPedido}`}
                                     >
                                       <Trash2 size={12} />
                                     </button>
