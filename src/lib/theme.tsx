@@ -11,7 +11,7 @@ interface ThemeContextType {
 const STORAGE_KEY = 'coliseu_theme';
 
 const ThemeContext = createContext<ThemeContextType>({
-  theme: 'dark',
+  theme: 'light',
   setTheme: () => {},
   toggleTheme: () => {},
 });
@@ -21,9 +21,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved === 'light' || saved === 'dark') return saved;
-      return 'dark'; // Dark theme default
+      return 'light'; // Modo Claro como padrão na primeira execução
     } catch {
-      return 'dark';
+      return 'light';
     }
   });
 
