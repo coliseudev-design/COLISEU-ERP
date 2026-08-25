@@ -14,11 +14,11 @@ const port = parseInt(process.env.PORT || '80', 10);
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-// Configuração do Pool PostgreSQL Central
+// Configuração do Pool PostgreSQL Central com alta tolerância e reconexão
 const connectionString = process.env.DATABASE_URL || process.env.DB_URL;
 const pool = new Pool(
   connectionString
-    ? { connectionString, max: 20, idleTimeoutMillis: 30000, connectionTimeoutMillis: 4000 }
+    ? { connectionString, max: 20, idleTimeoutMillis: 60000, connectionTimeoutMillis: 10000 }
     : {
         host: process.env.VITE_DB_HOST || process.env.DB_HOST || 'postgres-central',
         port: parseInt(process.env.VITE_DB_PORT || process.env.DB_PORT || '5432', 10),
@@ -26,10 +26,14 @@ const pool = new Pool(
         password: process.env.POSTGRES_PASSWORD || process.env.DB_PASSWORD,
         database: process.env.POSTGRES_DB || process.env.DB_NAME || 'coliseu_erp',
         max: 20,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 4000,
+        idleTimeoutMillis: 60000,
+        connectionTimeoutMillis: 10000,
       }
 );
+
+pool.on('error', (err) => {
+  console.warn('[PostgreSQL Pool] Aviso de conexão inativa ou reconexão:', err.message);
+});
 
 // Criação / Migração Automática das Tabelas no PostgreSQL Central
 async function initDb() {

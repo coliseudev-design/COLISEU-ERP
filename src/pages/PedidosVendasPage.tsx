@@ -204,23 +204,31 @@ export const PedidosVendasPage: React.FC = () => {
     }
   };
 
-  // Filtragem
+  // Filtragem 100% Blindada contra valores nulos
   const pedidosFiltrados = useMemo(() => {
     return pedidos.filter((p) => {
+      if (!p) return false;
       if (tabStatus !== 'TODOS' && p.status !== tabStatus) return false;
 
       if (busca) {
-        const q = busca.toLowerCase();
-        const mNum = p.numeroPedido.toLowerCase().includes(q);
-        const mCli = p.clienteNome.toLowerCase().includes(q);
-        const mVend = p.vendedorNome.toLowerCase().includes(q);
-        const mNat = p.naturezaOperacao.descricao.toLowerCase().includes(q) || p.naturezaOperacao.cfop.includes(q);
-        const mItem = p.itens.some(
+        const q = String(busca).toLowerCase().trim();
+        const mNum = String(p.numeroPedido || '').toLowerCase().includes(q);
+        const mCli = String(p.clienteNome || '').toLowerCase().includes(q);
+        const mVend = String(p.vendedorNome || '').toLowerCase().includes(q);
+        const natDesc = typeof p.naturezaOperacao === 'object' && p.naturezaOperacao !== null
+          ? String(p.naturezaOperacao.descricao || '')
+          : String(p.naturezaOperacao || '');
+        const natCfop = typeof p.naturezaOperacao === 'object' && p.naturezaOperacao !== null
+          ? String(p.naturezaOperacao.cfop || '')
+          : '';
+        const mNat = natDesc.toLowerCase().includes(q) || natCfop.includes(q);
+        
+        const mItem = Array.isArray(p.itens) && p.itens.some(
           (i) =>
-            i.descricao.toLowerCase().includes(q) ||
-            i.codigoFabrica.toLowerCase().includes(q) ||
-            i.referencia.toLowerCase().includes(q) ||
-            i.codigoBarras.includes(q)
+            String(i.descricao || '').toLowerCase().includes(q) ||
+            String(i.codigoFabrica || '').toLowerCase().includes(q) ||
+            String(i.referencia || '').toLowerCase().includes(q) ||
+            String(i.codigoBarras || '').includes(q)
         );
         if (!mNum && !mCli && !mVend && !mNat && !mItem) return false;
       }

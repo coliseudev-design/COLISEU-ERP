@@ -278,16 +278,26 @@ export const ProductsPage: React.FC = () => {
     const q = searchTerm.toLowerCase().trim();
     if (!q) return list;
 
-    return list.filter(
-      (p) =>
-        p.descricao.toLowerCase().includes(q) ||
-        p.sku.toLowerCase().includes(q) ||
-        (p.codigoBarras && p.codigoBarras.includes(q)) ||
-        (p.ncm && p.ncm.includes(q)) ||
-        (p.marca && p.marca.toLowerCase().includes(q)) ||
-        ((p as any).categoria && (p as any).categoria.toLowerCase().includes(q)) ||
-        ((p as any).localizacaoDeposito && (p as any).localizacaoDeposito.toLowerCase().includes(q))
-    );
+    return list.filter((p) => {
+      if (!p) return false;
+      const desc = String(p.descricao || '').toLowerCase();
+      const sku = String(p.sku || p.codigo || '').toLowerCase();
+      const ean = String(p.codigoBarras || '');
+      const ncm = String(p.ncm || '');
+      const marca = String(p.marca || '').toLowerCase();
+      const cat = String((p as any).categoria || '').toLowerCase();
+      const loc = String((p as any).localizacaoDeposito || '').toLowerCase();
+
+      return (
+        desc.includes(q) ||
+        sku.includes(q) ||
+        ean.includes(q) ||
+        ncm.includes(q) ||
+        marca.includes(q) ||
+        cat.includes(q) ||
+        loc.includes(q)
+      );
+    });
   }, [produtos, searchTerm, selectedCategoriaFilter, selectedMarcaFilter, selectedEnderecoFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredProdutos.length / pageSize));

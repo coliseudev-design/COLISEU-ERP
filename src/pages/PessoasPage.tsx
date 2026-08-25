@@ -655,10 +655,35 @@ export const PessoasPage: React.FC = () => {
       const baseList: PessoaUnificada[] = Array.isArray(migratedPessoasData) ? (migratedPessoasData as any[]) : INITIAL_PESSOAS;
 
       const map = new Map<string, PessoaUnificada>();
-      baseList.forEach((p) => map.set(p.id, p));
-      customList.forEach((p) => map.set(p.id, p));
+      baseList.forEach((p) => {
+        if (p && p.id) {
+          map.set(p.id, {
+            ...p,
+            tipo: p.tipo || 'CLIENTE',
+            nome: p.nome || '',
+            nomeAbrev: p.nomeAbrev || p.nome || '',
+            status: p.status || 'Ativo',
+          });
+        }
+      });
+      customList.forEach((p) => {
+        if (p && p.id) {
+          map.set(p.id, {
+            ...p,
+            tipo: p.tipo || 'CLIENTE',
+            nome: p.nome || '',
+            nomeAbrev: p.nomeAbrev || p.nome || '',
+            status: p.status || 'Ativo',
+          });
+        }
+      });
 
-      return Array.from(map.values());
+      const all = Array.from(map.values());
+      const customIds = new Set(customList.map((c) => c.id));
+      const customOnTop = all.filter((p) => customIds.has(p.id));
+      const baseRemaining = all.filter((p) => !customIds.has(p.id));
+
+      return [...customOnTop, ...baseRemaining];
     } catch {
       return INITIAL_PESSOAS;
     }

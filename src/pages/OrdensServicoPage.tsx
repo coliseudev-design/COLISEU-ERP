@@ -33,6 +33,7 @@ import {
 } from '../lib/ordensServico';
 import { ModalFichaOrdemServico } from '../components/servicos/ModalFichaOrdemServico';
 import { ModalImpressaoOS } from '../components/servicos/ModalImpressaoOS';
+import { syncService } from '../lib/syncService';
 
 export const OrdensServicoPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'KANBAN' | 'LISTA'>('KANBAN');
@@ -58,6 +59,26 @@ export const OrdensServicoPage: React.FC = () => {
       setOrdens(getOrdensServico());
     };
     window.addEventListener('coliseu_os_updated', handleUpdate);
+
+    // Carga inicial da Nuvem (PostgreSQL Central)
+    const loadCloudOS = async () => {
+      try {
+        const cloudList = await syncService.fetchCloudOrdensServico();
+        if (Array.isArray(cloudList) && cloudList.length > 0) {
+          const local = getOrdensServico();
+          const map = new Map<string, OrdemServicoItem>();
+          local.forEach((o) => map.set(o.id, o));
+          cloudList.forEach((co: any) => map.set(co.id, co));
+          const unificadas = Array.from(map.values());
+          localStorage.setItem('coliseu_ordens_servico', JSON.stringify(unificadas));
+          setOrdens(unificadas);
+        }
+      } catch (err) {
+        console.warn('[OS] Falha ao buscar OS da nuvem:', err);
+      }
+    };
+    loadCloudOS();
+
     return () => window.removeEventListener('coliseu_os_updated', handleUpdate);
   }, []);
 
@@ -89,17 +110,18 @@ export const OrdensServicoPage: React.FC = () => {
     showToast(`🔄 O.S. ${os.numeroOS} movida para ${novoStatus.replace('_', ' ')}!`);
   };
 
-  // Filtragem
+  // Filtragem 100% Blindada contra nulos
   const ordensFiltradas = useMemo(() => {
     return ordens.filter((os) => {
+      if (!os) return false;
       if (filtroStatus !== 'TODOS' && os.status !== filtroStatus) return false;
-      if (filtroTecnico && !os.tecnicoPrincipal.toUpperCase().includes(filtroTecnico.toUpperCase())) return false;
+      if (filtroTecnico && !String(os.tecnicoPrincipal || '').toUpperCase().includes(filtroTecnico.toUpperCase())) return false;
       if (busca) {
-        const q = busca.toLowerCase();
-        const mNum = os.numeroOS.toLowerCase().includes(q);
-        const mCli = os.clienteNome.toLowerCase().includes(q);
-        const mObj = os.descricaoObjeto.toLowerCase().includes(q);
-        const mPlaca = os.placaOuSerie.toLowerCase().includes(q);
+        const q = String(busca).toLowerCase().trim();
+        const mNum = String(os.numeroOS || '').toLowerCase().includes(q);
+        const mCli = String(os.clienteNome || '').toLowerCase().includes(q);
+        const mObj = String(os.descricaoObjeto || '').toLowerCase().includes(q);
+        const mPlaca = String(os.placaOuSerie || '').toLowerCase().includes(q);
         if (!mNum && !mCli && !mObj && !mPlaca) return false;
       }
       return true;

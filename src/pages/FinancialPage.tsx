@@ -579,15 +579,22 @@ export const FinancialPage: React.FC = () => {
       if (statusFilter === 'vencido' && (!t.isVencido || !t.isAberto)) return false;
       if (statusFilter === 'pago' && t.isAberto) return false;
 
-      // 3. Busca Textual
+      // 3. Busca Textual 100% Protegida
       if (!q) return true;
+      const cod = String(t.codigo || '').toLowerCase();
+      const tit = String(t.titulo || '').toLowerCase();
+      const cli = String(t.clienteFornecedor || '').toLowerCase();
+      const cat = String(t.categoria || '').toLowerCase();
+      const doc = String(t.cpfCnpj || '');
+      const ped = String(t.pedido || '').toLowerCase();
+
       return (
-        t.codigo.toLowerCase().includes(q) ||
-        t.titulo.toLowerCase().includes(q) ||
-        t.clienteFornecedor.toLowerCase().includes(q) ||
-        t.categoria.toLowerCase().includes(q) ||
-        (t.cpfCnpj && t.cpfCnpj.includes(q)) ||
-        (t.pedido && t.pedido.toLowerCase().includes(q))
+        cod.includes(q) ||
+        tit.includes(q) ||
+        cli.includes(q) ||
+        cat.includes(q) ||
+        doc.includes(q) ||
+        ped.includes(q)
       );
     });
 
@@ -597,36 +604,36 @@ export const FinancialPage: React.FC = () => {
 
       switch (sortField) {
         case 'codigo':
-          valA = parseInt(a.codigo, 10) || a.codigo;
-          valB = parseInt(b.codigo, 10) || b.codigo;
+          valA = parseInt(String(a.codigo || '0'), 10) || String(a.codigo || '');
+          valB = parseInt(String(b.codigo || '0'), 10) || String(b.codigo || '');
           break;
         case 'cliente':
-          valA = (a.clienteFornecedor || '').toLowerCase();
-          valB = (b.clienteFornecedor || '').toLowerCase();
+          valA = String(a.clienteFornecedor || '').toLowerCase();
+          valB = String(b.clienteFornecedor || '').toLowerCase();
           break;
         case 'titulo':
-          valA = (a.titulo || '').toLowerCase();
-          valB = (b.titulo || '').toLowerCase();
+          valA = String(a.titulo || '').toLowerCase();
+          valB = String(b.titulo || '').toLowerCase();
           break;
         case 'emissao':
-          valA = a.emissao || '';
-          valB = b.emissao || '';
+          valA = String(a.emissao || '');
+          valB = String(b.emissao || '');
           break;
         case 'parcela':
-          valA = a.parcela || '';
-          valB = b.parcela || '';
+          valA = String(a.parcela || '');
+          valB = String(b.parcela || '');
           break;
         case 'tipo':
-          valA = a.tipoRP || '';
-          valB = b.tipoRP || '';
+          valA = String(a.tipoRP || '');
+          valB = String(b.tipoRP || '');
           break;
         case 'vencimento':
-          valA = a.vencimento || '';
-          valB = b.vencimento || '';
+          valA = String(a.vencimento || '');
+          valB = String(b.vencimento || '');
           break;
         case 'quitacao':
-          valA = a.dataQuitacao || a.vencimento || '';
-          valB = b.dataQuitacao || b.vencimento || '';
+          valA = String(a.dataQuitacao || a.vencimento || '');
+          valB = String(b.dataQuitacao || b.vencimento || '');
           break;
         case 'valor':
           valA = a.valor || 0;
@@ -637,16 +644,16 @@ export const FinancialPage: React.FC = () => {
           valB = b.isAberto ? (b.valorAtual || b.valor) : (b.valorPago || b.valor);
           break;
         case 'especie':
-          valA = (a.formaPagamento || '').toLowerCase();
-          valB = (b.formaPagamento || '').toLowerCase();
+          valA = String(a.formaPagamento || '').toLowerCase();
+          valB = String(b.formaPagamento || '').toLowerCase();
           break;
         case 'status':
-          valA = a.status || '';
-          valB = b.status || '';
+          valA = String(a.status || '');
+          valB = String(b.status || '');
           break;
         default:
-          valA = a.vencimento || '';
-          valB = b.vencimento || '';
+          valA = String(a.vencimento || '');
+          valB = String(b.vencimento || '');
       }
 
       if (valA < valB) return sortDirection === 'asc' ? -1 : 1;

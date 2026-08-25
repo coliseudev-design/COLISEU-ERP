@@ -121,6 +121,8 @@ export function getOrdensServico(): OrdemServicoItem[] {
   }
 }
 
+import { syncService } from './syncService';
+
 export function salvarOrdemServico(os: OrdemServicoItem): OrdemServicoItem[] {
   const lista = getOrdensServico();
   const index = lista.findIndex((item) => item.id === os.id);
@@ -135,6 +137,7 @@ export function salvarOrdemServico(os: OrdemServicoItem): OrdemServicoItem[] {
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(atualizada));
   window.dispatchEvent(new Event('coliseu_os_updated'));
+  syncService.syncOrdemServico(os).catch(() => {});
   return atualizada;
 }
 
@@ -143,6 +146,7 @@ export function excluirOrdemServico(id: string): OrdemServicoItem[] {
   const atualizada = lista.filter((item) => item.id !== id);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(atualizada));
   window.dispatchEvent(new Event('coliseu_os_updated'));
+  syncService.deleteOrdemServico(id).catch(() => {});
   return atualizada;
 }
 
