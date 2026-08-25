@@ -569,21 +569,35 @@ export const ModalEmissaoPedidoVenda: React.FC<ModalEmissaoPedidoVendaProps> = (
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <select
-              value={normStatus}
-              onChange={(e) => setStatus(e.target.value as any)}
-              disabled={isBloqueadoEdicao}
-              className="coliseu-input"
-              style={{ height: '30px', fontSize: '11px', fontWeight: 700 }}
-              title={isBloqueadoEdicao ? 'Status controlado pelo fluxo fiscal / comercial' : 'Alterar status comercial'}
+            {/* Indicador Visual Oficial de Status (Sem alteração manual) */}
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                backgroundColor: statusCfg.bg,
+                border: `1px solid ${statusCfg.border}`,
+                color: statusCfg.text,
+                fontSize: '11.5px',
+                fontWeight: 800,
+                boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
+              }}
+              title={`Status oficial: ${statusCfg.label}. As transições ocorrem automaticamente pelas operações comerciais e fiscais.`}
             >
-              <option value="EM_ABERTO">⬜ EM ABERTO (ORÇAMENTO)</option>
-              <option value="A_FATURAR">🟩 A FATURAR (APROVADO)</option>
-              <option value="EM_FATURAMENTO">🟨 EM FATURAMENTO (NF-E VINCULADA)</option>
-              <option value="PROCESSADO">⬛ PROCESSADO (CONCLUÍDO)</option>
-              <option value="BLOQUEADO">🟥 BLOQUEADO</option>
-              <option value="CANCELADO">🟦 CANCELADO</option>
-            </select>
+              <span
+                style={{
+                  width: '10px',
+                  height: '10px',
+                  borderRadius: '2px',
+                  backgroundColor: statusCfg.bg,
+                  border: `1px solid ${statusCfg.border}`,
+                  display: 'inline-block',
+                }}
+              />
+              {statusCfg.label.toUpperCase()}
+            </div>
 
             <button
               type="button"
