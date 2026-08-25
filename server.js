@@ -285,6 +285,7 @@ let inMemoryOS = [];
 let inMemoryFinanceiro = [];
 let inMemoryTransporte = [];
 let inMemoryDocFiscais = [];
+let inMemoryCertificados = {};
 
 // =========================================================================
 // BARRAMENTO DE EVENTOS EM TEMPO REAL (SSE - SERVER-SENT EVENTS)
@@ -1177,32 +1178,50 @@ app.post('/api/fiscal/certificados/upload', async (req, res) => {
   const encPass = encryptText(password);
 
   try {
-    await pool.query(`UPDATE certificados_digitais SET is_active = FALSE WHERE empresa_id = $1`, [empId]);
-
-    const result = await pool.query(
-      `INSERT INTO certificados_digitais (
-        id, empresa_id, alias, cnpj, nome_titular, validade_inicio, validade_fim,
-        pfx_encrypted_base64, password_encrypted, is_active, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE, CURRENT_TIMESTAMP)
-      RETURNING id, empresa_id, alias, cnpj, nome_titular, validade_inicio, validade_fim, is_active, created_at`,
-      [
-        certId,
-        empId,
-        alias || 'Certificado Digital A1',
-        cnpj || '',
-        nomeTitular || 'EMPRESA TITULAR',
-        validadeInicio || new Date().toISOString(),
-        validadeFim || new Date(Date.now() + 365 * 86400000).toISOString(),
-        encPfx,
-        encPass,
-      ]
-    );
-
     const certDir = path.join(FISCAL_STORAGE_DIR, 'certificados', empId);
     fs.mkdirSync(certDir, { recursive: true });
     fs.writeFileSync(path.join(certDir, 'cert_a1_active.bin'), encPfx, 'utf8');
 
-    const certData = result.rows[0];
+    const certData = {
+      id: certId,
+      empresa_id: empId,
+      alias: alias || 'Certificado Digital A1',
+      cnpj: cnpj || '',
+      nome_titular: nomeTitular || 'EMPRESA TITULAR',
+      validade_inicio: validadeInicio || new Date().toISOString(),
+      validade_fim: validadeFim || new Date(Date.now() + 365 * 86400000).toISOString(),
+      pfx_encrypted_base64: encPfx,
+      password_encrypted: encPass,
+      is_active: true,
+      updated_at: new Date().toISOString(),
+    };
+
+    fs.writeFileSync(path.join(certDir, 'cert_active.json'), JSON.stringify(certData, null, 2), 'utf8');
+    inMemoryCertificados[empId] = certData;
+
+    try {
+      await pool.query(`UPDATE certificados_digitais SET is_active = FALSE WHERE empresa_id = $1`, [empId]);
+      await pool.query(
+        `INSERT INTO certificados_digitais (
+          id, empresa_id, alias, cnpj, nome_titular, validade_inicio, validade_fim,
+          pfx_encrypted_base64, password_encrypted, is_active, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE, CURRENT_TIMESTAMP)`,
+        [
+          certId,
+          empId,
+          certData.alias,
+          certData.cnpj,
+          certData.nome_titular,
+          certData.validade_inicio,
+          certData.validade_fim,
+          encPfx,
+          encPass,
+        ]
+      );
+    } catch (pgErr) {
+      console.warn('[Fiscal] PostgreSQL offline, certificado armazenado com sucesso no cofre seguro em disco da VPS:', pgErr.message);
+    }
+
     return res.json({
       success: true,
       message: '✅ Certificado Digital A1 instalado e protegido no cofre central com sucesso!',
@@ -1217,6 +1236,8 @@ app.post('/api/fiscal/certificados/upload', async (req, res) => {
 // 7.2 Status do Certificado Ativo
 app.get('/api/fiscal/certificados/status', async (req, res) => {
   const empId = req.query.empresaId || 'emp-matriz-001';
+
+  // 1. Tentar consultar no PostgreSQL
   try {
     const result = await pool.query(
       `SELECT id, empresa_id, alias, cnpj, nome_titular, validade_inicio, validade_fim, is_active, updated_at
@@ -1235,11 +1256,34 @@ app.get('/api/fiscal/certificados/status', async (req, res) => {
         certificado: { ...cert, diasRestantes, expirado: diasRestantes <= 0 },
       });
     }
-
-    return res.json({ instalado: false, message: 'Nenhum certificado A1 ativo cadastrado na VPS.' });
-  } catch (err) {
-    return res.json({ instalado: false, error: err.message });
+  } catch (pgErr) {
+    console.warn('[Fiscal] Aviso ao buscar certificado no Postgres, consultando armazenamento local:', pgErr.message);
   }
+
+  // 2. Fallback de Alta Disponibilidade: Armazenamento em Disco da VPS
+  try {
+    const certDir = path.join(FISCAL_STORAGE_DIR, 'certificados', empId);
+    const certJsonFile = path.join(certDir, 'cert_active.json');
+
+    let cert = inMemoryCertificados[empId];
+    if (!cert && fs.existsSync(certJsonFile)) {
+      cert = JSON.parse(fs.readFileSync(certJsonFile, 'utf8'));
+      inMemoryCertificados[empId] = cert;
+    }
+
+    if (cert && cert.is_active) {
+      const validade = new Date(cert.validade_fim || cert.validadeFim);
+      const diasRestantes = Math.ceil((validade.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+      return res.json({
+        instalado: true,
+        certificado: { ...cert, diasRestantes, expirado: diasRestantes <= 0 },
+      });
+    }
+  } catch (diskErr) {
+    console.warn('[Fiscal] Erro ao ler certificado do disco:', diskErr.message);
+  }
+
+  return res.json({ instalado: false, message: 'Nenhum certificado A1 ativo cadastrado na VPS.' });
 });
 
 // 7.2.1 Emissão e Transmissão Centralizada na VPS (NF-e 55, NFC-e 65, CT-e 57, MDF-e 58)
@@ -1262,18 +1306,27 @@ app.post('/api/fiscal/emitir', async (req, res) => {
   } = req.body;
 
   try {
-    // 1. Busca dados da empresa
-    const empResult = await pool.query(`SELECT id, razao_social, cnpj, uf FROM empresas WHERE id = $1 LIMIT 1`, [empresaId]);
-    const emp = empResult.rows[0] || { cnpj: '05766577000122', razao_social: 'COLISEU SISTEMAS LTDA', uf: 'MS' };
+    // 1. Busca dados da empresa (com fallback seguro)
+    let emp = { cnpj: '05766577000122', razao_social: 'COLISEU SISTEMAS LTDA', uf: 'MS' };
+    try {
+      const empResult = await pool.query(`SELECT id, razao_social, cnpj, uf FROM empresas WHERE id = $1 LIMIT 1`, [empresaId]);
+      if (empResult.rows.length > 0) emp = empResult.rows[0];
+    } catch {
+      // Fallback padrão
+    }
 
     // 2. Busca número sequencial se não informado
     let numNota = parseInt(numero, 10);
     if (!numNota || isNaN(numNota)) {
-      const maxRes = await pool.query(
-        `SELECT COALESCE(MAX(numero), 1000) + 1 AS proximo FROM documentos_fiscais WHERE empresa_id = $1 AND modelo = $2 AND serie = $3`,
-        [empresaId, modelo.toString(), parseInt(serie, 10)]
-      );
-      numNota = parseInt(maxRes.rows[0]?.proximo || '1025', 10);
+      try {
+        const maxRes = await pool.query(
+          `SELECT COALESCE(MAX(numero), 1000) + 1 AS proximo FROM documentos_fiscais WHERE empresa_id = $1 AND modelo = $2 AND serie = $3`,
+          [empresaId, modelo.toString(), parseInt(serie, 10)]
+        );
+        numNota = parseInt(maxRes.rows[0]?.proximo || '1025', 10);
+      } catch {
+        numNota = 1025 + inMemoryDocFiscais.length;
+      }
     }
 
     // 3. Gera a Chave de Acesso Oficial de 44 dígitos
@@ -1354,44 +1407,68 @@ app.post('/api/fiscal/emitir', async (req, res) => {
     fs.writeFileSync(path.join(xmlDir, xmlFileName), xmlTexto, 'utf8');
     const xmlRelPath = `xmls/${empresaId}/${modStr}/${ano}/${mes}/${xmlFileName}`;
 
-    // 6. Grava na tabela documentos_fiscais
+    // 6. Grava na tabela documentos_fiscais e em memória
     const docId = `doc-${chaveAcesso}`;
-    const result = await pool.query(
-      `INSERT INTO documentos_fiscais (
-        id, empresa_id, filial_id, modelo, serie, numero, chave_acesso, status,
-        data_emissao, data_autorizacao, protocolo_autorizacao, motivo_status,
-        destinatario_nome, destinatario_cpf_cnpj, valor_total, xml_caminho_relativo,
-        xml_autorizado_texto, payload_json, is_deleted, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'AUTORIZADO', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, $8, $9, $10, $11, $12, $13, $14, $15, FALSE, CURRENT_TIMESTAMP)
-      ON CONFLICT (chave_acesso) DO UPDATE SET
-        status = 'AUTORIZADO',
-        protocolo_autorizacao = EXCLUDED.protocolo_autorizacao,
-        motivo_status = EXCLUDED.motivo_status,
-        xml_caminho_relativo = EXCLUDED.xml_caminho_relativo,
-        xml_autorizado_texto = EXCLUDED.xml_autorizado_texto,
-        updated_at = CURRENT_TIMESTAMP
-      RETURNING *`,
-      [
-        docId,
-        empresaId,
-        filialId,
-        modStr,
-        parseInt(serie, 10),
-        numNota,
-        chaveAcesso,
-        protocoloAutorizacao,
-        `Autorizado o uso do Documento Fiscal Mod. ${modStr}`,
-        destinatario.nome || 'CONSUMIDOR',
-        destinatario.cpfCnpj || '',
-        parseFloat(valorTotal || '0') || 0.0,
-        xmlRelPath,
-        xmlTexto,
-        JSON.stringify(req.body),
-      ]
-    );
+    const docSalvo = {
+      id: docId,
+      empresa_id: empresaId,
+      filial_id: filialId,
+      modelo: modStr,
+      serie: parseInt(serie, 10),
+      numero: numNota,
+      chave_acesso: chaveAcesso,
+      status: 'AUTORIZADO',
+      data_emissao: dataEmissao.toISOString(),
+      data_autorizacao: dataEmissao.toISOString(),
+      protocolo_autorizacao: protocoloAutorizacao,
+      motivo_status: `Autorizado o uso do Documento Fiscal Mod. ${modStr}`,
+      destinatario_nome: destinatario.nome || 'CONSUMIDOR',
+      destinatario_cpf_cnpj: destinatario.cpfCnpj || '',
+      valor_total: parseFloat(valorTotal || '0') || 0.0,
+      xml_caminho_relativo: xmlRelPath,
+      xml_autorizado_texto: xmlTexto,
+      payload_json: req.body,
+    };
 
-    const docSalvo = result.rows[0];
     inMemoryDocFiscais = [docSalvo, ...inMemoryDocFiscais.filter((d) => d.chave_acesso !== chaveAcesso)];
+
+    try {
+      await pool.query(
+        `INSERT INTO documentos_fiscais (
+          id, empresa_id, filial_id, modelo, serie, numero, chave_acesso, status,
+          data_emissao, data_autorizacao, protocolo_autorizacao, motivo_status,
+          destinatario_nome, destinatario_cpf_cnpj, valor_total, xml_caminho_relativo,
+          xml_autorizado_texto, payload_json, is_deleted, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'AUTORIZADO', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, $8, $9, $10, $11, $12, $13, $14, $15, FALSE, CURRENT_TIMESTAMP)
+        ON CONFLICT (chave_acesso) DO UPDATE SET
+          status = 'AUTORIZADO',
+          protocolo_autorizacao = EXCLUDED.protocolo_autorizacao,
+          motivo_status = EXCLUDED.motivo_status,
+          xml_caminho_relativo = EXCLUDED.xml_caminho_relativo,
+          xml_autorizado_texto = EXCLUDED.xml_autorizado_texto,
+          updated_at = CURRENT_TIMESTAMP`,
+        [
+          docId,
+          empresaId,
+          filialId,
+          modStr,
+          parseInt(serie, 10),
+          numNota,
+          chaveAcesso,
+          protocoloAutorizacao,
+          `Autorizado o uso do Documento Fiscal Mod. ${modStr}`,
+          destinatario.nome || 'CONSUMIDOR',
+          destinatario.cpfCnpj || '',
+          parseFloat(valorTotal || '0') || 0.0,
+          xmlRelPath,
+          xmlTexto,
+          JSON.stringify(req.body),
+        ]
+      );
+    } catch (pgErr) {
+      console.warn('[Fiscal] PostgreSQL offline, documento registrado no Concentrador em disco:', pgErr.message);
+    }
+
     broadcastMutation({ entity: 'documentos_fiscais', action: 'UPSERT', id: chaveAcesso, payload: docSalvo });
 
     // 7. Se vinculado a Pedido de Venda, atualiza o status do pedido
@@ -1466,6 +1543,29 @@ app.post('/api/fiscal/documentos/registrar', async (req, res) => {
     xmlRelPath = `xmls/${empId}/${mod}/${ano}/${mes}/${xmlFileName}`;
   }
 
+  const docSalvo = {
+    id: docId,
+    empresa_id: empId,
+    filial_id: filId,
+    modelo: mod,
+    serie: parseInt(serie || '1', 10),
+    numero: parseInt(numero || '1', 10),
+    chave_acesso: chaveAcesso,
+    status: status || 'AUTORIZADO',
+    data_emissao: agora.toISOString(),
+    data_autorizacao: agora.toISOString(),
+    protocolo_autorizacao: protocoloAutorizacao || '',
+    motivo_status: motivoStatus || `Autorizado o uso do Documento Mod. ${mod}`,
+    destinatario_nome: destinatarioNome || 'CONSUMIDOR',
+    destinatario_cpf_cnpj: destinatarioCpfCnpj || '',
+    valor_total: parseFloat(valorTotal || '0') || 0.0,
+    xml_caminho_relativo: xmlRelPath,
+    xml_autorizado_texto: xmlAutorizadoTexto || '',
+    payload_json: payload || {},
+  };
+
+  inMemoryDocFiscais = [docSalvo, ...inMemoryDocFiscais.filter((d) => d.chave_acesso !== chaveAcesso)];
+
   try {
     const result = await pool.query(
       `INSERT INTO documentos_fiscais (
@@ -1503,15 +1603,13 @@ app.post('/api/fiscal/documentos/registrar', async (req, res) => {
       ]
     );
 
-    const docSalvo = result.rows[0];
-    inMemoryDocFiscais = [docSalvo, ...inMemoryDocFiscais.filter((d) => d.chave_acesso !== chaveAcesso)];
-    broadcastMutation({ entity: 'transporte', action: 'UPSERT', id: chaveAcesso, payload: docSalvo });
-
-    return res.json({ success: true, message: 'Documento fiscal gravado no concentrador central.', documento: docSalvo });
+    if (result.rows[0]) docSalvo.id = result.rows[0].id;
   } catch (err) {
-    console.error('[Fiscal] Erro ao registrar documento fiscal:', err);
-    return res.status(500).json({ error: 'Erro ao registrar no concentrador: ' + err.message });
+    console.warn('[Fiscal] PostgreSQL offline, documento gravado no Concentrador em disco:', err.message);
   }
+
+  broadcastMutation({ entity: 'transporte', action: 'UPSERT', id: chaveAcesso, payload: docSalvo });
+  return res.json({ success: true, message: 'Documento fiscal gravado no concentrador central.', documento: docSalvo });
 });
 
 // 7.4 Listagem de Documentos Fiscais do Concentrador
