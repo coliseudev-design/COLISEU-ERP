@@ -38,6 +38,14 @@ class SyncEngine {
 
   constructor() {
     if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('coliseu_sync_pending_queue');
+        if (saved) {
+          this.pendingQueue = JSON.parse(saved);
+        }
+      } catch {
+        this.pendingQueue = [];
+      }
       this.init();
     }
   }
@@ -342,6 +350,7 @@ class SyncEngine {
     } catch (err) {
       console.warn('[OmniSync] Falha no push imediato, enfileirando offline:', err);
       this.pendingQueue.push(fullEvent);
+      this.savePendingQueue();
       this.connectionState = 'OFFLINE';
       this.notifyStatus();
       return false;
@@ -356,9 +365,20 @@ class SyncEngine {
 
     const queueToFlush = [...this.pendingQueue];
     this.pendingQueue = [];
+    this.savePendingQueue();
 
     for (const item of queueToFlush) {
       await this.mutate(item);
+    }
+  }
+
+  private savePendingQueue() {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('coliseu_sync_pending_queue', JSON.stringify(this.pendingQueue));
+      }
+    } catch {
+      // ignore
     }
   }
 
