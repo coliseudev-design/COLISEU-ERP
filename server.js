@@ -1,6 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
+import crypto from 'crypto';
+import zlib from 'zlib';
 import { fileURLToPath } from 'url';
 import pkg from 'pg';
 const { Pool } = pkg;
@@ -178,13 +181,94 @@ async function initDb() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
+
+      -- 7. Tabela de Certificados Digitais A1 (Cofre Encriptado AES-256)
+      CREATE TABLE IF NOT EXISTS certificados_digitais (
+        id VARCHAR(64) PRIMARY KEY,
+        empresa_id VARCHAR(64) NOT NULL DEFAULT 'emp-matriz-001',
+        alias VARCHAR(255) NOT NULL,
+        cnpj VARCHAR(20),
+        nome_titular VARCHAR(255),
+        validade_inicio TIMESTAMPTZ,
+        validade_fim TIMESTAMPTZ,
+        pfx_encrypted_base64 TEXT NOT NULL,
+        password_encrypted TEXT NOT NULL,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- 8. Tabela do Concentrador Único de Documentos Fiscais (NF-e, NFC-e, CT-e, MDF-e)
+      CREATE TABLE IF NOT EXISTS documentos_fiscais (
+        id VARCHAR(64) PRIMARY KEY,
+        empresa_id VARCHAR(64) NOT NULL DEFAULT 'emp-matriz-001',
+        filial_id VARCHAR(64) NOT NULL DEFAULT 'matriz',
+        modelo VARCHAR(10) NOT NULL, -- '55' (NF-e), '65' (NFC-e), '57' (CT-e), '58' (MDF-e)
+        serie INT NOT NULL DEFAULT 1,
+        numero BIGINT NOT NULL,
+        chave_acesso VARCHAR(44) NOT NULL UNIQUE,
+        status VARCHAR(30) NOT NULL DEFAULT 'AUTORIZADO', -- 'AUTORIZADO', 'CANCELADO', 'DENEGADO', 'REJEITADO'
+        data_emissao TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        data_autorizacao TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        protocolo_autorizacao VARCHAR(60),
+        motivo_status TEXT,
+        destinatario_nome VARCHAR(255),
+        destinatario_cpf_cnpj VARCHAR(20),
+        valor_total NUMERIC(15,2) NOT NULL DEFAULT 0.00,
+        xml_caminho_relativo VARCHAR(255),
+        xml_autorizado_texto TEXT,
+        pdf_caminho_relativo VARCHAR(255),
+        payload_json JSONB,
+        is_deleted BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_doc_fiscais_chave ON documentos_fiscais(chave_acesso);
+      CREATE INDEX IF NOT EXISTS idx_doc_fiscais_periodo ON documentos_fiscais(empresa_id, modelo, data_emissao);
     `);
-    console.log('[PostgreSQL Central] Schema Omni-Sync verificado com sucesso.');
+    console.log('[PostgreSQL Central] Schema Omni-Sync e Concentrador Fiscal verificados com sucesso.');
   } catch (err) {
     console.warn('[PostgreSQL Central] Aviso na inicialização de tabelas:', err.message);
   }
 }
 initDb();
+
+// Diretório Concentrador de Arquivos Fiscais no Disco / Storage
+const FISCAL_STORAGE_DIR = process.env.FISCAL_STORAGE_DIR || path.join(__dirname, 'storage', 'fiscal');
+try {
+  fs.mkdirSync(path.join(FISCAL_STORAGE_DIR, 'certificados'), { recursive: true });
+  fs.mkdirSync(path.join(FISCAL_STORAGE_DIR, 'xmls'), { recursive: true });
+  fs.mkdirSync(path.join(FISCAL_STORAGE_DIR, 'pdfs'), { recursive: true });
+  console.log(`[Concentrador Fiscal] Diretório centralizado pronto em: ${FISCAL_STORAGE_DIR}`);
+} catch (err) {
+  console.warn('[Concentrador Fiscal] Aviso ao criar pastas de armazenamento:', err.message);
+}
+
+// Utilitários de Criptografia AES-256 para Cofre de Certificados A1
+const FISCAL_SECRET = process.env.FISCAL_SECRET_KEY || 'COLISEU_ERP_FISCAL_MASTER_KEY_2026_AES256_SECRET';
+
+function getCryptoKey(secret) {
+  return crypto.createHash('sha256').update(secret).digest();
+}
+
+function encryptText(plainText) {
+  if (!plainText) return '';
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-cbc', getCryptoKey(FISCAL_SECRET), iv);
+  let encrypted = cipher.update(plainText, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return `${iv.toString('hex')}:${encrypted}`;
+}
+
+function decryptText(encryptedString) {
+  if (!encryptedString || !encryptedString.includes(':')) return '';
+  const [ivHex, encData] = encryptedString.split(':');
+  const iv = Buffer.from(ivHex, 'hex');
+  const decipher = crypto.createDecipheriv('aes-256-cbc', getCryptoKey(FISCAL_SECRET), iv);
+  let decrypted = decipher.update(encData, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  return decrypted;
+}
 
 // Fallbacks e Caches em memória
 let inMemoryPedidos = [];
@@ -193,6 +277,7 @@ let inMemoryProdutos = [];
 let inMemoryOS = [];
 let inMemoryFinanceiro = [];
 let inMemoryTransporte = [];
+let inMemoryDocFiscais = [];
 
 // =========================================================================
 // BARRAMENTO DE EVENTOS EM TEMPO REAL (SSE - SERVER-SENT EVENTS)
@@ -1065,6 +1150,299 @@ app.post('/api/transporte', async (req, res) => {
     inMemoryTransporte = [item, ...inMemoryTransporte.filter((t) => t.id !== item.id)];
     broadcastMutation({ entity: 'transporte', action: 'UPSERT', id: item.id, payload: item });
     return res.json({ success: true, transporte: item, fallback: true });
+  }
+});
+
+// =========================================================================
+// 7. ROTAS FISCAIS, COFRE DE CERTIFICADOS A1 & CONCENTRADOR ÚNICO DE XMLS
+// =========================================================================
+
+// 7.1 Upload e Ativação de Certificado Digital A1
+app.post('/api/fiscal/certificados/upload', async (req, res) => {
+  const { alias, cnpj, nomeTitular, validadeInicio, validadeFim, pfxBase64, password, empresaId } = req.body;
+  if (!pfxBase64 || !password) {
+    return res.status(400).json({ error: 'Arquivo .PFX (Base64) e senha são obrigatórios.' });
+  }
+
+  const empId = empresaId || 'emp-matriz-001';
+  const certId = `cert-${Date.now()}`;
+  const encPfx = encryptText(pfxBase64);
+  const encPass = encryptText(password);
+
+  try {
+    await pool.query(`UPDATE certificados_digitais SET is_active = FALSE WHERE empresa_id = $1`, [empId]);
+
+    const result = await pool.query(
+      `INSERT INTO certificados_digitais (
+        id, empresa_id, alias, cnpj, nome_titular, validade_inicio, validade_fim,
+        pfx_encrypted_base64, password_encrypted, is_active, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE, CURRENT_TIMESTAMP)
+      RETURNING id, empresa_id, alias, cnpj, nome_titular, validade_inicio, validade_fim, is_active, created_at`,
+      [
+        certId,
+        empId,
+        alias || 'Certificado Digital A1',
+        cnpj || '',
+        nomeTitular || 'EMPRESA TITULAR',
+        validadeInicio || new Date().toISOString(),
+        validadeFim || new Date(Date.now() + 365 * 86400000).toISOString(),
+        encPfx,
+        encPass,
+      ]
+    );
+
+    const certDir = path.join(FISCAL_STORAGE_DIR, 'certificados', empId);
+    fs.mkdirSync(certDir, { recursive: true });
+    fs.writeFileSync(path.join(certDir, 'cert_a1_active.bin'), encPfx, 'utf8');
+
+    const certData = result.rows[0];
+    return res.json({
+      success: true,
+      message: '✅ Certificado Digital A1 instalado e protegido no cofre central com sucesso!',
+      certificado: certData,
+    });
+  } catch (err) {
+    console.error('[Fiscal] Erro ao salvar certificado:', err);
+    return res.status(500).json({ error: 'Falha ao salvar certificado no cofre da VPS: ' + err.message });
+  }
+});
+
+// 7.2 Status do Certificado Ativo
+app.get('/api/fiscal/certificados/status', async (req, res) => {
+  const empId = req.query.empresaId || 'emp-matriz-001';
+  try {
+    const result = await pool.query(
+      `SELECT id, empresa_id, alias, cnpj, nome_titular, validade_inicio, validade_fim, is_active, updated_at
+       FROM certificados_digitais
+       WHERE empresa_id = $1 AND is_active = TRUE
+       ORDER BY updated_at DESC LIMIT 1`,
+      [empId]
+    );
+
+    if (result.rows.length > 0) {
+      const cert = result.rows[0];
+      const validade = new Date(cert.validade_fim);
+      const diasRestantes = Math.ceil((validade.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+      return res.json({
+        instalado: true,
+        certificado: { ...cert, diasRestantes, expirado: diasRestantes <= 0 },
+      });
+    }
+
+    return res.json({ instalado: false, message: 'Nenhum certificado A1 ativo cadastrado na VPS.' });
+  } catch (err) {
+    return res.json({ instalado: false, error: err.message });
+  }
+});
+
+// 7.3 Registrar Documento Fiscal no Concentrador Único (XML + Metadados)
+app.post('/api/fiscal/documentos/registrar', async (req, res) => {
+  const {
+    chaveAcesso,
+    modelo,
+    serie,
+    numero,
+    status,
+    valorTotal,
+    destinatarioNome,
+    destinatarioCpfCnpj,
+    xmlAutorizadoTexto,
+    protocoloAutorizacao,
+    motivoStatus,
+    payload,
+    empresaId,
+    filialId,
+  } = req.body;
+
+  if (!chaveAcesso) {
+    return res.status(400).json({ error: 'Chave de acesso é obrigatória.' });
+  }
+
+  const empId = empresaId || 'emp-matriz-001';
+  const filId = filialId || 'matriz';
+  const mod = modelo || '55';
+  const docId = `doc-${chaveAcesso}`;
+
+  const agora = new Date();
+  const ano = agora.getFullYear().toString();
+  const mes = (agora.getMonth() + 1).toString().padStart(2, '0');
+
+  let xmlRelPath = '';
+  if (xmlAutorizadoTexto) {
+    const xmlDir = path.join(FISCAL_STORAGE_DIR, 'xmls', empId, mod, ano, mes);
+    fs.mkdirSync(xmlDir, { recursive: true });
+    const xmlFileName = `${chaveAcesso}-proc${mod}.xml`;
+    fs.writeFileSync(path.join(xmlDir, xmlFileName), xmlAutorizadoTexto, 'utf8');
+    xmlRelPath = `xmls/${empId}/${mod}/${ano}/${mes}/${xmlFileName}`;
+  }
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO documentos_fiscais (
+        id, empresa_id, filial_id, modelo, serie, numero, chave_acesso, status,
+        data_emissao, data_autorizacao, protocolo_autorizacao, motivo_status,
+        destinatario_nome, destinatario_cpf_cnpj, valor_total, xml_caminho_relativo,
+        xml_autorizado_texto, payload_json, is_deleted, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, $9, $10, $11, $12, $13, $14, $15, $16, FALSE, CURRENT_TIMESTAMP)
+      ON CONFLICT (chave_acesso) DO UPDATE SET
+        status = EXCLUDED.status,
+        protocolo_autorizacao = EXCLUDED.protocolo_autorizacao,
+        motivo_status = EXCLUDED.motivo_status,
+        xml_caminho_relativo = EXCLUDED.xml_caminho_relativo,
+        xml_autorizado_texto = EXCLUDED.xml_autorizado_texto,
+        payload_json = EXCLUDED.payload_json,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING *`,
+      [
+        docId,
+        empId,
+        filId,
+        mod,
+        parseInt(serie || '1', 10),
+        parseInt(numero || '1', 10),
+        chaveAcesso,
+        status || 'AUTORIZADO',
+        protocoloAutorizacao || '',
+        motivoStatus || 'Autorizado o uso da NF-e',
+        destinatarioNome || 'CONSUMIDOR',
+        destinatarioCpfCnpj || '',
+        parseFloat(valorTotal || '0') || 0.0,
+        xmlRelPath,
+        xmlAutorizadoTexto || '',
+        JSON.stringify(payload || {}),
+      ]
+    );
+
+    const docSalvo = result.rows[0];
+    inMemoryDocFiscais = [docSalvo, ...inMemoryDocFiscais.filter((d) => d.chave_acesso !== chaveAcesso)];
+    broadcastMutation({ entity: 'transporte', action: 'UPSERT', id: chaveAcesso, payload: docSalvo });
+
+    return res.json({ success: true, message: 'Documento fiscal gravado no concentrador central.', documento: docSalvo });
+  } catch (err) {
+    console.error('[Fiscal] Erro ao registrar documento fiscal:', err);
+    return res.status(500).json({ error: 'Erro ao registrar no concentrador: ' + err.message });
+  }
+});
+
+// 7.4 Listagem de Documentos Fiscais do Concentrador
+app.get('/api/fiscal/documentos', async (req, res) => {
+  const { modelo, status, limit, offset, busca } = req.query;
+  const empId = req.query.empresaId || 'emp-matriz-001';
+
+  try {
+    let query = `SELECT id, empresa_id, filial_id, modelo, serie, numero, chave_acesso, status, data_emissao, data_autorizacao, protocolo_autorizacao, motivo_status, destinatario_nome, destinatario_cpf_cnpj, valor_total, xml_caminho_relativo, created_at FROM documentos_fiscais WHERE empresa_id = $1 AND is_deleted = FALSE`;
+    const params = [empId];
+
+    if (modelo && modelo !== 'TODOS') {
+      params.push(modelo);
+      query += ` AND modelo = $${params.length}`;
+    }
+
+    if (status && status !== 'TODOS') {
+      params.push(status);
+      query += ` AND status = $${params.length}`;
+    }
+
+    if (busca) {
+      params.push(`%${busca}%`);
+      query += ` AND (chave_acesso ILIKE $${params.length} OR destinatario_nome ILIKE $${params.length} OR destinatario_cpf_cnpj ILIKE $${params.length} OR numero::text ILIKE $${params.length})`;
+    }
+
+    query += ` ORDER BY data_emissao DESC LIMIT ${parseInt(limit || '100', 10)} OFFSET ${parseInt(offset || '0', 10)}`;
+
+    const result = await pool.query(query, params);
+    return res.json(result.rows);
+  } catch (err) {
+    return res.json(inMemoryDocFiscais);
+  }
+});
+
+// 7.5 Download / Visualização de XML Oficial por Chave
+app.get('/api/fiscal/xml/:chave', async (req, res) => {
+  const { chave } = req.params;
+  try {
+    const result = await pool.query(
+      `SELECT chave_acesso, modelo, xml_autorizado_texto, xml_caminho_relativo FROM documentos_fiscais WHERE chave_acesso = $1`,
+      [chave]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Documento fiscal não encontrado no concentrador central.' });
+    }
+
+    const doc = result.rows[0];
+    let xmlContent = doc.xml_autorizado_texto;
+
+    if (!xmlContent && doc.xml_caminho_relativo) {
+      const fullPath = path.join(FISCAL_STORAGE_DIR, doc.xml_caminho_relativo);
+      if (fs.existsSync(fullPath)) {
+        xmlContent = fs.readFileSync(fullPath, 'utf8');
+      }
+    }
+
+    if (!xmlContent) {
+      return res.status(404).json({ error: 'Conteúdo do XML não disponível.' });
+    }
+
+    res.setHeader('Content-Type', 'application/xml');
+    res.setHeader('Content-Disposition', `attachment; filename="${chave}-proc${doc.modelo || '55'}.xml"`);
+    return res.send(xmlContent);
+  } catch (err) {
+    return res.status(500).json({ error: 'Erro ao buscar XML: ' + err.message });
+  }
+});
+
+// 7.6 Exportação em Lote dos XMLs do Mês para Contabilidade
+app.get('/api/fiscal/exportar-mes', async (req, res) => {
+  const { ano, mes, modelo, empresaId } = req.query;
+  const empId = empresaId || 'emp-matriz-001';
+  const targetAno = ano || new Date().getFullYear().toString();
+  const targetMes = mes ? mes.toString().padStart(2, '0') : (new Date().getMonth() + 1).toString().padStart(2, '0');
+
+  try {
+    let query = `
+      SELECT chave_acesso, modelo, serie, numero, valor_total, data_emissao, xml_autorizado_texto, xml_caminho_relativo
+      FROM documentos_fiscais
+      WHERE empresa_id = $1
+        AND EXTRACT(YEAR FROM data_emissao) = $2
+        AND EXTRACT(MONTH FROM data_emissao) = $3
+        AND is_deleted = FALSE
+    `;
+    const params = [empId, parseInt(targetAno, 10), parseInt(targetMes, 10)];
+
+    if (modelo && modelo !== 'TODOS') {
+      params.push(modelo);
+      query += ` AND modelo = $${params.length}`;
+    }
+
+    query += ` ORDER BY data_emissao ASC`;
+    const result = await pool.query(query, params);
+
+    const documentos = result.rows.map((row) => {
+      let xml = row.xml_autorizado_texto;
+      if (!xml && row.xml_caminho_relativo) {
+        const p = path.join(FISCAL_STORAGE_DIR, row.xml_caminho_relativo);
+        if (fs.existsSync(p)) xml = fs.readFileSync(p, 'utf8');
+      }
+      return {
+        chave: row.chave_acesso,
+        modelo: row.modelo,
+        serie: row.serie,
+        numero: row.numero,
+        valorTotal: row.valor_total,
+        dataEmissao: row.data_emissao,
+        xml,
+      };
+    });
+
+    return res.json({
+      ano: targetAno,
+      mes: targetMes,
+      totalDocumentos: documentos.length,
+      documentos,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: 'Erro ao exportar lote mensal: ' + err.message });
   }
 });
 
