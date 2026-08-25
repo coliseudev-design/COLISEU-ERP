@@ -51,12 +51,40 @@ export const fiscalCloudService = {
   async getCertificadoStatus(empresaId = 'emp-matriz-001'): Promise<CertificadoA1Status> {
     try {
       const res = await fetch(`${CLOUD_API_URL}/api/fiscal/certificados/status?empresaId=${empresaId}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
+      if (res.ok) {
+        const data: CertificadoA1Status = await res.json();
+        if (data.instalado && data.certificado) {
+          try {
+            localStorage.setItem(`coliseu_cert_vps_${empresaId}`, JSON.stringify(data));
+          } catch {}
+          return data;
+        }
+      }
     } catch (err: any) {
-      console.warn('[FiscalCloud] Falha ao consultar status do certificado:', err);
-      return { instalado: false, error: err.message };
+      console.warn('[FiscalCloud] Falha ao consultar status do certificado na nuvem:', err);
     }
+
+    // Fallback: verificar cache persistido no cliente
+    try {
+      const cached = localStorage.getItem(`coliseu_cert_vps_${empresaId}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.instalado && parsed?.certificado) {
+          const validade = new Date(parsed.certificado.validade_fim || parsed.certificado.validadeFim);
+          const diasRestantes = Math.ceil((validade.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+          return {
+            instalado: true,
+            certificado: {
+              ...parsed.certificado,
+              diasRestantes,
+              expirado: diasRestantes <= 0,
+            },
+          };
+        }
+      }
+    } catch {}
+
+    return { instalado: false, message: 'Nenhum certificado A1 ativo cadastrado na VPS.' };
   },
 
   /**
@@ -72,6 +100,7 @@ export const fiscalCloudService = {
     password: string;
     empresaId?: string;
   }): Promise<{ success: boolean; message: string; certificado?: any }> {
+    const empId = payload.empresaId || 'emp-matriz-001';
     const res = await fetch(`${CLOUD_API_URL}/api/fiscal/certificados/upload`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -81,6 +110,24 @@ export const fiscalCloudService = {
     const data = await res.json();
     if (!res.ok) {
       throw new Error(data.error || 'Falha no upload do certificado para a VPS.');
+    }
+
+    if (data.certificado) {
+      try {
+        const validade = new Date(data.certificado.validade_fim || data.certificado.validadeFim || Date.now() + 365 * 86400000);
+        const diasRestantes = Math.ceil((validade.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+        localStorage.setItem(
+          `coliseu_cert_vps_${empId}`,
+          JSON.stringify({
+            instalado: true,
+            certificado: {
+              ...data.certificado,
+              diasRestantes,
+              expirado: diasRestantes <= 0,
+            },
+          })
+        );
+      } catch {}
     }
     return data;
   },

@@ -287,6 +287,26 @@ let inMemoryTransporte = [];
 let inMemoryDocFiscais = [];
 let inMemoryCertificados = {};
 
+function loadCertificadosFromDisk() {
+  try {
+    const certBaseDir = path.join(FISCAL_STORAGE_DIR, 'certificados');
+    if (fs.existsSync(certBaseDir)) {
+      const empDirs = fs.readdirSync(certBaseDir);
+      for (const empId of empDirs) {
+        const certJsonFile = path.join(certBaseDir, empId, 'cert_active.json');
+        if (fs.existsSync(certJsonFile)) {
+          const certData = JSON.parse(fs.readFileSync(certJsonFile, 'utf8'));
+          inMemoryCertificados[empId] = certData;
+          console.log(`[Fiscal] Certificado ativo carregado do disco para empresa ${empId}: ${certData.alias || certData.nome_titular}`);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Fiscal] Aviso ao carregar certificados do disco:', err.message);
+  }
+}
+loadCertificadosFromDisk();
+
 // =========================================================================
 // BARRAMENTO DE EVENTOS EM TEMPO REAL (SSE - SERVER-SENT EVENTS)
 // =========================================================================
