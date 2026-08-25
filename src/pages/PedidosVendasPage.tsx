@@ -19,6 +19,10 @@ import {
   Barcode,
   Receipt,
   RefreshCw,
+  SlidersHorizontal,
+  GripVertical,
+  Columns,
+  RotateCcw,
 } from 'lucide-react';
 import {
   PedidoVendaItem,
@@ -35,6 +39,30 @@ import { ModalEmissaoPedidoVenda } from '../components/vendas/ModalEmissaoPedido
 import { ModalImpressaoPedidoA4 } from '../components/vendas/ModalImpressaoPedidoA4';
 import { ModalFaturamentoNFe } from '../components/vendas/ModalFaturamentoNFe';
 import { ModalFaturamentoNFCe } from '../components/vendas/ModalFaturamentoNFCe';
+import {
+  ModalPersonalizarColunasPedidos,
+  ColunaTabelaPedido,
+} from '../components/vendas/ModalPersonalizarColunasPedidos';
+
+export const COLUNAS_PADRAO_PEDIDOS: ColunaTabelaPedido[] = [
+  { id: 'numeroPedido', label: 'Nº Pedido', visible: true, width: '95px', minWidth: '90px', align: 'left' },
+  { id: 'nfe', label: 'NF-e', visible: true, width: '85px', minWidth: '80px', align: 'center' },
+  { id: 'nfce', label: 'NFC-e', visible: true, width: '85px', minWidth: '80px', align: 'center' },
+  { id: 'dataEmissao', label: 'Data/Hora', visible: true, width: '135px', minWidth: '125px', align: 'left' },
+  { id: 'dataFaturamento', label: 'Data Faturamento', visible: true, width: '125px', minWidth: '115px', align: 'left' },
+  { id: 'cliente', label: 'Cliente / Fornecedor', visible: true, width: '250px', minWidth: '200px', align: 'left' },
+  { id: 'vendedor', label: 'Vendedor', visible: true, width: '140px', minWidth: '120px', align: 'left' },
+  { id: 'valorTotal', label: 'Valor Total', visible: true, width: '115px', minWidth: '105px', align: 'right' },
+  { id: 'valorDesconto', label: 'Valor Desconto', visible: true, width: '110px', minWidth: '100px', align: 'right' },
+  { id: 'valorOriginal', label: 'Valor Original', visible: true, width: '115px', minWidth: '105px', align: 'right' },
+  { id: 'especie', label: 'Espécie', visible: true, width: '140px', minWidth: '120px', align: 'left' },
+  { id: 'formaPgto', label: 'Forma de Pgto', visible: true, width: '120px', minWidth: '100px', align: 'left' },
+  { id: 'cupomFiscal', label: 'Cupom Fiscal', visible: true, width: '105px', minWidth: '95px', align: 'center' },
+  { id: 'naturezaOp', label: 'Natureza Op.', visible: true, width: '220px', minWidth: '180px', align: 'left' },
+  { id: 'itens', label: 'Itens', visible: true, width: '65px', minWidth: '60px', align: 'center' },
+  { id: 'status', label: 'Status', visible: true, width: '105px', minWidth: '95px', align: 'center' },
+  { id: 'acoes', label: 'Ações', visible: true, width: '240px', minWidth: '220px', align: 'center' },
+];
 
 export const PedidosVendasPage: React.FC = () => {
   const [pedidos, setPedidos] = useState<PedidoVendaItem[]>(getPedidosVenda);
@@ -42,6 +70,27 @@ export const PedidosVendasPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'TABELA' | 'KANBAN'>('TABELA');
   const [busca, setBusca] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Configuração e Ordem de Colunas Personalizadas
+  const [colunas, setColunas] = useState<ColunaTabelaPedido[]>(() => {
+    try {
+      const salvo = localStorage.getItem('coliseu_pedidos_colunas_v3');
+      if (salvo) {
+        const parsed = JSON.parse(salvo);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Garantir que novas colunas que possam não existir no storage antigo sejam mescladas
+          const idsSalvos = new Set(parsed.map((c: ColunaTabelaPedido) => c.id));
+          const faltantes = COLUNAS_PADRAO_PEDIDOS.filter((c) => !idsSalvos.has(c.id));
+          return [...parsed, ...faltantes];
+        }
+      }
+    } catch {}
+    return COLUNAS_PADRAO_PEDIDOS;
+  });
+
+  const [isModalColunasOpen, setIsModalColunasOpen] = useState(false);
+  const [draggedColId, setDraggedColId] = useState<string | null>(null);
+  const [dragOverColId, setDragOverColId] = useState<string | null>(null);
 
   // Modais
   const [isModalEmissaoOpen, setIsModalEmissaoOpen] = useState(false);
@@ -54,6 +103,67 @@ export const PedidosVendasPage: React.FC = () => {
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  const handleSalvarColunas = (novasColunas: ColunaTabelaPedido[]) => {
+    setColunas(novasColunas);
+    try {
+      localStorage.setItem('coliseu_pedidos_colunas_v3', JSON.stringify(novasColunas));
+    } catch {}
+    showToast('Preferências de colunas salvas com sucesso!');
+  };
+
+  const handleRestaurarColunasPadrao = () => {
+    setColunas(COLUNAS_PADRAO_PEDIDOS);
+    try {
+      localStorage.setItem('coliseu_pedidos_colunas_v3', JSON.stringify(COLUNAS_PADRAO_PEDIDOS));
+    } catch {}
+    showToast('Colunas restauradas para o padrão oficial!');
+    setIsModalColunasOpen(false);
+  };
+
+  // Drag & Drop no Cabeçalho da Tabela
+  const handleHeaderDragStart = (e: React.DragEvent, id: string) => {
+    setDraggedColId(id);
+    e.dataTransfer.setData('text/plain', id);
+  };
+
+  const handleHeaderDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    if (dragOverColId !== id) {
+      setDragOverColId(id);
+    }
+  };
+
+  const handleHeaderDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!draggedColId || draggedColId === targetId) {
+      setDraggedColId(null);
+      setDragOverColId(null);
+      return;
+    }
+
+    const indexOrigem = colunas.findIndex((c) => c.id === draggedColId);
+    const indexDestino = colunas.findIndex((c) => c.id === targetId);
+
+    if (indexOrigem !== -1 && indexDestino !== -1) {
+      const novaLista = [...colunas];
+      const [removido] = novaLista.splice(indexOrigem, 1);
+      novaLista.splice(indexDestino, 0, removido);
+      setColunas(novaLista);
+      try {
+        localStorage.setItem('coliseu_pedidos_colunas_v3', JSON.stringify(novaLista));
+      } catch {}
+      showToast(`Coluna "${removido.label}" reposicionada!`);
+    }
+
+    setDraggedColId(null);
+    setDragOverColId(null);
+  };
+
+  const handleHeaderDragEnd = () => {
+    setDraggedColId(null);
+    setDragOverColId(null);
   };
 
   useEffect(() => {
@@ -405,204 +515,465 @@ export const PedidosVendasPage: React.FC = () => {
           ))}
         </div>
 
-        <div style={{ width: '320px' }}>
-          <div style={{ position: 'relative' }}>
-            <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--text-muted)' }} />
-            <input
-              type="text"
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar Nº, Cliente, Cód. Fábrica, CFOP..."
-              className="coliseu-input"
-              style={{ paddingLeft: '30px', height: '34px', fontSize: '11px' }}
-            />
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {/* Botão de Personalização de Colunas */}
+          <button
+            type="button"
+            onClick={() => setIsModalColunasOpen(true)}
+            className="coliseu-btn coliseu-btn-secondary"
+            style={{
+              height: '34px',
+              padding: '0 12px',
+              fontSize: '11px',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+            title="Personalizar Colunas e Ordem de Exibição"
+          >
+            <SlidersHorizontal size={13} />
+            <span>Colunas ({colunas.filter((c) => c.visible).length})</span>
+          </button>
+
+          <div style={{ width: '300px' }}>
+            <div style={{ position: 'relative' }}>
+              <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--text-muted)' }} />
+              <input
+                type="text"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar Nº, Cliente, Cód. Fábrica, CFOP..."
+                className="coliseu-input"
+                style={{ paddingLeft: '30px', height: '34px', fontSize: '11px' }}
+              />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* VISÃO TABELA */}
+      {/* DICA DE ARRASTAR COLUNAS */}
       {viewMode === 'TABELA' && (
-        <div className="coliseu-card">
-          <div className="coliseu-table-container">
-            <table className="coliseu-table" style={{ fontSize: '12px' }}>
+        <div
+          style={{
+            fontSize: '11px',
+            color: 'var(--text-muted)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '2px 4px',
+            marginBottom: '4px',
+          }}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            💡 <em>Dica: Arraste os cabeçalhos das colunas para reposicioná-las conforme sua preferência de visualização.</em>
+          </span>
+          <span style={{ fontSize: '10.5px' }}>
+            {pedidosFiltrados.length} pedidos listados • Barra de rolagem horizontal ativa
+          </span>
+        </div>
+      )}
+
+      {/* VISÃO TABELA COM ROLAGEM HORIZONTAL E DRAG-AND-DROP */}
+      {viewMode === 'TABELA' && (
+        <div className="coliseu-card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div
+            className="coliseu-table-container"
+            style={{
+              maxHeight: 'calc(100vh - 280px)',
+              overflowX: 'auto',
+              overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch',
+            }}
+          >
+            <table
+              className="coliseu-table"
+              style={{
+                fontSize: '12px',
+                width: 'max-content',
+                minWidth: '100%',
+                borderCollapse: 'separate',
+                borderSpacing: 0,
+              }}
+            >
               <thead>
                 <tr>
-                  <th style={{ width: '85px' }}>Nº Pedido</th>
-                  <th style={{ width: '90px' }}>Emissão</th>
-                  <th>Cliente / Destinatário</th>
-                  <th style={{ width: '220px' }}>Natureza da Operação</th>
-                  <th style={{ width: '130px' }}>Vendedor</th>
-                  <th style={{ width: '60px', textAlign: 'center' }}>Itens</th>
-                  <th style={{ width: '110px', textAlign: 'right' }}>Total (R$)</th>
-                  <th style={{ width: '100px', textAlign: 'center' }}>Status</th>
-                  <th style={{ width: '180px', textAlign: 'center' }}>Ações</th>
+                  {colunas
+                    .filter((c) => c.visible)
+                    .map((col) => {
+                      const isDraggingThis = draggedColId === col.id;
+                      const isOverThis = dragOverColId === col.id;
+
+                      return (
+                        <th
+                          key={col.id}
+                          draggable
+                          onDragStart={(e) => handleHeaderDragStart(e, col.id)}
+                          onDragOver={(e) => handleHeaderDragOver(e, col.id)}
+                          onDrop={(e) => handleHeaderDrop(e, col.id)}
+                          onDragEnd={handleHeaderDragEnd}
+                          style={{
+                            width: col.width,
+                            minWidth: col.minWidth || col.width,
+                            textAlign: col.align || 'left',
+                            cursor: 'grab',
+                            userSelect: 'none',
+                            backgroundColor: isOverThis
+                              ? 'rgba(59, 130, 246, 0.2)'
+                              : isDraggingThis
+                              ? 'rgba(0, 0, 0, 0.05)'
+                              : undefined,
+                            borderLeft: isOverThis ? '2px solid #3b82f6' : undefined,
+                            position: 'sticky',
+                            top: 0,
+                            zIndex: 2,
+                            whiteSpace: 'nowrap',
+                          }}
+                          title="Arraste para reposicionar esta coluna"
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent:
+                                col.align === 'center'
+                                  ? 'center'
+                                  : col.align === 'right'
+                                  ? 'flex-end'
+                                  : 'flex-start',
+                              gap: '4px',
+                            }}
+                          >
+                            <GripVertical size={11} style={{ opacity: 0.4, flexShrink: 0 }} />
+                            <span>{col.label}</span>
+                          </div>
+                        </th>
+                      );
+                    })}
                 </tr>
               </thead>
               <tbody>
-                {pedidosFiltrados.map((p) => (
-                  <tr key={p.id}>
-                    <td style={{ fontWeight: 800, color: 'var(--text-link)', fontSize: '12px' }}>
-                      {p.numeroPedido}
-                    </td>
-                    <td style={{ fontSize: '11px' }} className="tabular-nums">{formatDate(p.dataEmissao)}</td>
-                    <td>
-                      <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{p.clienteNome}</div>
-                      <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                        CNPJ/CPF: {p.clienteCnpjCpf} • {p.clienteCidade}/{p.clienteUf}
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ fontWeight: 600, color: '#3b82f6', fontSize: '11px' }}>
-                        {p.naturezaOperacao?.cfop || '5102'} - {(p.naturezaOperacao?.descricao || 'VENDA DE MERCADORIAS').slice(0, 32)}...
-                      </div>
-                    </td>
-                    <td style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{p.vendedorNome}</td>
-                    <td style={{ textAlign: 'center', fontWeight: 700 }}>{p.itens.length}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#10b981', fontFamily: 'monospace' }}>
-                      {formatCurrency(p.valorTotalFinal)}
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span
-                        style={{
-                          fontSize: '10px',
-                          fontWeight: 700,
-                          padding: '2px 8px',
-                          borderRadius: '4px',
-                          backgroundColor:
-                            p.status === 'FATURADO'
-                              ? 'rgba(16, 185, 129, 0.15)'
-                              : p.status === 'APROVADO'
-                              ? 'rgba(59, 130, 246, 0.15)'
-                              : 'rgba(234, 179, 8, 0.15)',
-                          color:
-                            p.status === 'FATURADO'
-                              ? '#10b981'
-                              : p.status === 'APROVADO'
-                              ? '#3b82f6'
-                              : '#eab308',
-                        }}
-                      >
-                        {p.status}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
-                        {/* Imprimir A4 */}
-                        <button
-                          type="button"
-                          onClick={() => handleImprimirA4(p)}
-                          className="coliseu-btn coliseu-btn-secondary"
-                          style={{ padding: '0 6px', height: '26px', fontSize: '11px' }}
-                          title="Imprimir Pedido / Orçamento A4"
+                {pedidosFiltrados.map((p) => {
+                  const colunasVisiveis = colunas.filter((c) => c.visible);
+
+                  return (
+                    <tr key={p.id} style={{ height: '36px' }}>
+                      {colunasVisiveis.map((col) => (
+                        <td
+                          key={col.id}
+                          style={{
+                            textAlign: col.align || 'left',
+                            whiteSpace: 'nowrap',
+                            padding: '6px 10px',
+                          }}
                         >
-                          <Printer size={12} /> A4
-                        </button>
+                          {(() => {
+                            switch (col.id) {
+                              case 'numeroPedido':
+                                return (
+                                  <span style={{ fontWeight: 800, color: 'var(--text-link, #2563eb)', fontSize: '12px' }}>
+                                    {p.numeroPedido}
+                                  </span>
+                                );
+                              case 'nfe': {
+                                const temNfe = !!p.chaveNFeEmitida;
+                                return temNfe ? (
+                                  <span
+                                    style={{
+                                      fontSize: '10.5px',
+                                      fontWeight: 700,
+                                      padding: '2px 6px',
+                                      borderRadius: '4px',
+                                      backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                                      color: '#10b981',
+                                    }}
+                                    title={`Chave NF-e: ${p.chaveNFeEmitida}`}
+                                  >
+                                    {p.numeroNFe || 'Emitida'}
+                                  </span>
+                                ) : (
+                                  <span style={{ color: 'var(--text-muted, #9ca3af)', fontSize: '11px' }}>0</span>
+                                );
+                              }
+                              case 'nfce': {
+                                const temNfce = !!p.chaveNFCeEmitida;
+                                return temNfce ? (
+                                  <span
+                                    style={{
+                                      fontSize: '10.5px',
+                                      fontWeight: 700,
+                                      padding: '2px 6px',
+                                      borderRadius: '4px',
+                                      backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                                      color: '#3b82f6',
+                                    }}
+                                    title={`Chave NFC-e: ${p.chaveNFCeEmitida}`}
+                                  >
+                                    {p.numeroNFCe || 'Emitida'}
+                                  </span>
+                                ) : (
+                                  <span style={{ color: 'var(--text-muted, #9ca3af)', fontSize: '11px' }}>0</span>
+                                );
+                              }
+                              case 'dataEmissao':
+                                return (
+                                  <span style={{ fontSize: '11px' }} className="tabular-nums">
+                                    {p.dataEmissao?.includes('T')
+                                      ? new Date(p.dataEmissao).toLocaleString('pt-BR')
+                                      : p.dataEmissao || '-'}
+                                  </span>
+                                );
+                              case 'dataFaturamento':
+                                return (
+                                  <span style={{ fontSize: '11px' }} className="tabular-nums">
+                                    {p.dataFaturamento || (p.status === 'FATURADO' ? formatDate(p.dataEmissao) : '-')}
+                                  </span>
+                                );
+                              case 'cliente':
+                                return (
+                                  <div>
+                                    <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '11.5px' }}>
+                                      {p.clienteNome}
+                                    </div>
+                                    <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                                      CNPJ/CPF: {p.clienteCnpjCpf || '000.000.000-00'} • {p.clienteCidade || 'DOURADOS'}/{p.clienteUf || 'MS'}
+                                    </div>
+                                  </div>
+                                );
+                              case 'vendedor':
+                                return (
+                                  <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                    {p.vendedorNome || 'ROBERSON'}
+                                  </span>
+                                );
+                              case 'valorTotal':
+                                return (
+                                  <span style={{ fontWeight: 800, color: '#10b981', fontFamily: 'monospace' }}>
+                                    {formatCurrency(p.valorTotalFinal)}
+                                  </span>
+                                );
+                              case 'valorDesconto': {
+                                const desc = p.totalDescontoGlobal || 0;
+                                return (
+                                  <span
+                                    style={{
+                                      fontWeight: desc > 0 ? 700 : 500,
+                                      color: desc > 0 ? '#ef4444' : 'var(--text-muted)',
+                                      fontFamily: 'monospace',
+                                    }}
+                                  >
+                                    {formatCurrency(desc)}
+                                  </span>
+                                );
+                              }
+                              case 'valorOriginal': {
+                                const original = (p.totalProdutos || p.valorTotalFinal) + (p.totalDescontoGlobal || 0);
+                                return (
+                                  <span style={{ fontWeight: 600, color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
+                                    {formatCurrency(original)}
+                                  </span>
+                                );
+                              }
+                              case 'especie': {
+                                const esp = p.parcelas?.[0]?.especiePagamento || p.formaPagamentoNome || 'BOLETO BANCARIO';
+                                return (
+                                  <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+                                    {esp}
+                                  </span>
+                                );
+                              }
+                              case 'formaPgto':
+                                return (
+                                  <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                    {p.formaPagamentoNome || (p.parcelas && p.parcelas.length > 1 ? `${p.parcelas.length} X` : 'À VISTA')}
+                                  </span>
+                                );
+                              case 'cupomFiscal': {
+                                const numCupom = p.numeroNFCe || (p.chaveNFCeEmitida ? 'EMITIDO' : '0');
+                                return (
+                                  <span
+                                    style={{
+                                      fontSize: '11px',
+                                      color: p.chaveNFCeEmitida ? '#10b981' : 'var(--text-muted)',
+                                      fontWeight: p.chaveNFCeEmitida ? 700 : 500,
+                                    }}
+                                  >
+                                    {numCupom}
+                                  </span>
+                                );
+                              }
+                              case 'naturezaOp': {
+                                const nat = p.naturezaOperacao;
+                                const cfop = nat?.cfop || '5102';
+                                const desc = nat?.descricao || 'VENDA DE MERCADORIAS DENTRO DO ESTADO';
+                                return (
+                                  <div style={{ fontWeight: 600, color: '#3b82f6', fontSize: '11px' }} title={`${cfop} - ${desc}`}>
+                                    {cfop} - {desc.length > 28 ? desc.slice(0, 28) + '...' : desc}
+                                  </div>
+                                );
+                              }
+                              case 'itens':
+                                return <span style={{ fontWeight: 700 }}>{p.itens.length}</span>;
+                              case 'status':
+                                return (
+                                  <span
+                                    style={{
+                                      fontSize: '10px',
+                                      fontWeight: 700,
+                                      padding: '2px 8px',
+                                      borderRadius: '4px',
+                                      backgroundColor:
+                                        p.status === 'FATURADO'
+                                          ? 'rgba(16, 185, 129, 0.15)'
+                                          : p.status === 'APROVADO'
+                                          ? 'rgba(59, 130, 246, 0.15)'
+                                          : 'rgba(234, 179, 8, 0.15)',
+                                      color:
+                                        p.status === 'FATURADO'
+                                          ? '#10b981'
+                                          : p.status === 'APROVADO'
+                                          ? '#3b82f6'
+                                          : '#eab308',
+                                    }}
+                                  >
+                                    {p.status}
+                                  </span>
+                                );
+                              case 'acoes':
+                                return (
+                                  <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                                    {/* Imprimir A4 */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleImprimirA4(p)}
+                                      className="coliseu-btn coliseu-btn-secondary"
+                                      style={{ padding: '0 6px', height: '26px', fontSize: '11px' }}
+                                      title="Imprimir Pedido / Orçamento A4"
+                                    >
+                                      <Printer size={12} /> A4
+                                    </button>
 
-                        {/* Botão Dinâmico de NF-e / Acobertamento */}
-                        {(() => {
-                          const check = podeFaturarPedidoNFe(p);
-                          if (check.acaoRecomendada === 'ACOBERTAMENTO') {
-                            return (
-                              <button
-                                type="button"
-                                onClick={() => handleFaturarNFe(p)}
-                                className="coliseu-btn coliseu-btn-secondary"
-                                style={{ padding: '0 6px', height: '26px', fontSize: '11px', color: '#8b5cf6', borderColor: 'rgba(139, 92, 246, 0.4)' }}
-                                title="Emitir NF-e de Acobertamento (CFOP 5.929 / 6.929)"
-                              >
-                                <FileCheck size={12} /> Acobertamento
-                              </button>
-                            );
-                          }
-                          if (check.permitido) {
-                            return (
-                              <button
-                                type="button"
-                                onClick={() => handleFaturarNFe(p)}
-                                className="coliseu-btn coliseu-btn-secondary"
-                                style={{ padding: '0 6px', height: '26px', fontSize: '11px', color: '#3b82f6' }}
-                                title="Emitir NF-e Mod. 55"
-                              >
-                                <FileCheck size={12} /> Emitir NFE
-                              </button>
-                            );
-                          }
-                          if (p.chaveNFeEmitida) {
-                            return (
-                              <button
-                                type="button"
-                                onClick={() => handleFaturarNFe(p)}
-                                className="coliseu-btn coliseu-btn-secondary"
-                                style={{ padding: '0 6px', height: '26px', fontSize: '11px', color: '#10b981' }}
-                                title={`NF-e Nº ${p.numeroNFe || ''} Autorizada`}
-                              >
-                                <FileCheck size={12} /> Ver NF-e
-                              </button>
-                            );
-                          }
-                          return null;
-                        })()}
+                                    {/* Botão Dinâmico de NF-e / Acobertamento */}
+                                    {(() => {
+                                      const check = podeFaturarPedidoNFe(p);
+                                      if (check.acaoRecomendada === 'ACOBERTAMENTO') {
+                                        return (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleFaturarNFe(p)}
+                                            className="coliseu-btn coliseu-btn-secondary"
+                                            style={{
+                                              padding: '0 6px',
+                                              height: '26px',
+                                              fontSize: '11px',
+                                              color: '#8b5cf6',
+                                              borderColor: 'rgba(139, 92, 246, 0.4)',
+                                            }}
+                                            title="Emitir NF-e de Acobertamento (CFOP 5.929 / 6.929)"
+                                          >
+                                            <FileCheck size={12} /> Acobertamento
+                                          </button>
+                                        );
+                                      }
+                                      if (check.permitido) {
+                                        return (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleFaturarNFe(p)}
+                                            className="coliseu-btn coliseu-btn-secondary"
+                                            style={{ padding: '0 6px', height: '26px', fontSize: '11px', color: '#3b82f6' }}
+                                            title="Emitir NF-e Mod. 55"
+                                          >
+                                            <FileCheck size={12} /> Emitir NFE
+                                          </button>
+                                        );
+                                      }
+                                      if (p.chaveNFeEmitida) {
+                                        return (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleFaturarNFe(p)}
+                                            className="coliseu-btn coliseu-btn-secondary"
+                                            style={{ padding: '0 6px', height: '26px', fontSize: '11px', color: '#10b981' }}
+                                            title={`NF-e Nº ${p.numeroNFe || ''} Autorizada`}
+                                          >
+                                            <FileCheck size={12} /> Ver NF-e
+                                          </button>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
 
-                        {/* Botão Dinâmico de NFC-e (Mod. 65) */}
-                        {(() => {
-                          const checkNfce = podeFaturarPedidoNFCe(p);
-                          if (checkNfce.permitido) {
-                            return (
-                              <button
-                                type="button"
-                                onClick={() => handleFaturarNFCe(p)}
-                                className="coliseu-btn coliseu-btn-secondary"
-                                style={{ padding: '0 6px', height: '26px', fontSize: '11px', color: '#10b981' }}
-                                title="Emitir NFC-e Mod. 65 (Cupom Fiscal)"
-                              >
-                                <Receipt size={12} /> Emitir NFCe
-                              </button>
-                            );
-                          }
-                          if (p.chaveNFCeEmitida) {
-                            return (
-                              <button
-                                type="button"
-                                onClick={() => handleFaturarNFCe(p)}
-                                className="coliseu-btn coliseu-btn-secondary"
-                                style={{ padding: '0 6px', height: '26px', fontSize: '11px', color: '#10b981' }}
-                                title={`NFC-e Nº ${p.numeroNFCe || ''} Autorizada`}
-                              >
-                                <Receipt size={12} /> Ver NFC-e
-                              </button>
-                            );
-                          }
-                          return null;
-                        })()}
+                                    {/* Botão Dinâmico de NFC-e */}
+                                    {(() => {
+                                      const checkNfce = podeFaturarPedidoNFCe(p);
+                                      if (checkNfce.permitido) {
+                                        return (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleFaturarNFCe(p)}
+                                            className="coliseu-btn coliseu-btn-secondary"
+                                            style={{ padding: '0 6px', height: '26px', fontSize: '11px', color: '#10b981' }}
+                                            title="Emitir NFC-e Mod. 65 (Cupom Fiscal)"
+                                          >
+                                            <Receipt size={12} /> Emitir NFCe
+                                          </button>
+                                        );
+                                      }
+                                      if (p.chaveNFCeEmitida) {
+                                        return (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleFaturarNFCe(p)}
+                                            className="coliseu-btn coliseu-btn-secondary"
+                                            style={{ padding: '0 6px', height: '26px', fontSize: '11px', color: '#10b981' }}
+                                            title={`NFC-e Nº ${p.numeroNFCe || ''} Autorizada`}
+                                          >
+                                            <Receipt size={12} /> Ver NFC-e
+                                          </button>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
 
-                        {/* Editar */}
-                        <button
-                          type="button"
-                          onClick={() => handleEditarPedido(p)}
-                          className="coliseu-btn coliseu-btn-secondary"
-                          style={{ padding: '0 6px', height: '26px', fontSize: '11px' }}
-                          title="Editar / Abrir Pedido"
-                        >
-                          <Edit2 size={12} />
-                        </button>
+                                    {/* Editar */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEditarPedido(p)}
+                                      className="coliseu-btn coliseu-btn-secondary"
+                                      style={{ padding: '0 6px', height: '26px', fontSize: '11px' }}
+                                      title="Editar / Abrir Pedido"
+                                    >
+                                      <Edit2 size={12} />
+                                    </button>
 
-                        {/* Excluir */}
-                        <button
-                          type="button"
-                          onClick={() => handleExcluir(p.id, p.numeroPedido)}
-                          className="coliseu-btn coliseu-btn-secondary"
-                          style={{ padding: '0 6px', height: '26px', fontSize: '11px', color: '#ef4444' }}
-                          title="Excluir"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                                    {/* Excluir */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleExcluir(p.id, p.numeroPedido)}
+                                      className="coliseu-btn coliseu-btn-secondary"
+                                      style={{ padding: '0 6px', height: '26px', fontSize: '11px', color: '#ef4444' }}
+                                      title="Excluir"
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                  </div>
+                                );
+                              default:
+                                return null;
+                            }
+                          })()}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
                 {pedidosFiltrados.length === 0 && (
                   <tr>
-                    <td colSpan={9} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                    <td
+                      colSpan={colunas.filter((c) => c.visible).length || 1}
+                      style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}
+                    >
                       Nenhum pedido ou orçamento encontrado. Pressione <strong>F3</strong> para emitir uma nova venda.
                     </td>
                   </tr>
@@ -745,6 +1116,15 @@ export const PedidosVendasPage: React.FC = () => {
           }}
         />
       )}
+
+      {/* Modal de Personalização de Colunas & Reordenação */}
+      <ModalPersonalizarColunasPedidos
+        isOpen={isModalColunasOpen}
+        onClose={() => setIsModalColunasOpen(false)}
+        colunas={colunas}
+        onSalvarColunas={handleSalvarColunas}
+        onRestaurarPadrao={handleRestaurarColunasPadrao}
+      />
     </div>
   );
 };
