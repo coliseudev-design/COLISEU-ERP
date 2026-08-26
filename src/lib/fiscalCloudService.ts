@@ -133,6 +133,39 @@ export const fiscalCloudService = {
   },
 
   /**
+   * Consulta o status do serviço em tempo real na SEFAZ MS / SVRS via mTLS
+   */
+  async consultarStatusSefazReal(params: { uf?: string; ambiente?: string; empresaId?: string } = {}): Promise<{
+    success: boolean;
+    online: boolean;
+    cStat?: string;
+    xMotivo?: string;
+    dhRecbto?: string;
+    tempoMedio?: string;
+    ambiente?: string;
+    uf?: string;
+    error?: string;
+    message?: string;
+  }> {
+    try {
+      const q = new URLSearchParams();
+      if (params.uf) q.append('uf', params.uf);
+      if (params.ambiente) q.append('ambiente', params.ambiente);
+      if (params.empresaId) q.append('empresaId', params.empresaId);
+
+      const res = await fetch(`${CLOUD_API_URL}/api/fiscal/sefaz/status-servico?${q.toString()}`);
+      const data = await res.json();
+      return data;
+    } catch (err: any) {
+      return {
+        success: false,
+        online: false,
+        error: `Erro ao conectar com a API Fiscal Central: ${err.message}`,
+      };
+    }
+  },
+
+  /**
    * Lista todos os documentos fiscais armazenados no Concentrador Único da VPS
    */
   async fetchDocumentosFiscais(filters: {

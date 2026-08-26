@@ -103,7 +103,34 @@ export const CardCertificadoVpsStatus: React.FC<CardCertificadoVpsStatusProps> =
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: '8px', flexShrink: 0, alignItems: 'center' }}>
+          {status.instalado && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={async () => {
+                setIsLoading(true);
+                try {
+                  const res = await fiscalCloudService.consultarStatusSefazReal({ empresaId, uf: '50', ambiente: '2' });
+                  if (res.online && res.cStat === '107') {
+                    alert(`✅ SEFAZ MS ONLINE & OPERANDO!\n\n• Status: ${res.cStat} - ${res.xMotivo}\n• Ambiente: ${res.ambiente}\n• Tempo Médio de Resposta: ${res.tempoMedio}\n• Data/Hora SEFAZ: ${res.dhRecbto}`);
+                  } else {
+                    alert(`⚠️ Retorno da SEFAZ:\n\n${res.error || res.xMotivo || res.message || 'Falha na consulta mTLS com a SEFAZ.'}`);
+                  }
+                } catch (e: any) {
+                  alert(`Erro ao consultar SEFAZ: ${e.message}`);
+                } finally {
+                  setIsLoading(false);
+                }
+              }}
+              disabled={isLoading}
+              title="Testar Conexão mTLS com os Servidores da SEFAZ MS em Tempo Real"
+              style={{ height: '30px', fontSize: '11px', fontWeight: 700, borderColor: '#3b82f6', color: '#2563eb' }}
+            >
+              ⚡ Testar SEFAZ MS
+            </Button>
+          )}
+
           <Button
             variant="secondary"
             size="sm"

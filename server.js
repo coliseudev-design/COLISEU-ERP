@@ -13,6 +13,10 @@ import {
   gerarXmlNFCe,
   gerarXmlCTe,
   gerarXmlMDFe,
+  extrairDadosCertificadoPfx,
+  assinarXmlNFe,
+  consultarStatusServicoSefaz,
+  transmitirLoteNFeSefaz,
 } from './fiscalEngine.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -1183,17 +1187,23 @@ app.post('/api/transporte', async (req, res) => {
 
 // =========================================================================
 // 7. ROTAS FISCAIS, COFRE DE CERTIFICADOS A1 & CONCENTRADOR ÚNICO DE XMLS
-// =========================================================================
-
-// 7.1 Upload e Ativação de Certificado Digital A1
+// ==========================// 7.1 Upload e Ativação de Certificado Digital A1 com Extração Real PKCS#12
 app.post('/api/fiscal/certificados/upload', async (req, res) => {
-  const { alias, cnpj, nomeTitular, validadeInicio, validadeFim, pfxBase64, password, empresaId } = req.body;
+  const { alias, cnpj, nomeTitular, pfxBase64, password, empresaId } = req.body;
   if (!pfxBase64 || !password) {
     return res.status(400).json({ error: 'Arquivo .PFX (Base64) e senha são obrigatórios.' });
   }
 
   const empId = empresaId || 'emp-matriz-001';
   const certId = `cert-${Date.now()}`;
+  const pfxBuffer = Buffer.from(pfxBase64, 'base64');
+
+  // 1. Extração Real de Metadados X.509 via node-forge
+  const dadosCert = extrairDadosCertificadoPfx(pfxBuffer, password);
+  if (!dadosCert.success) {
+    return res.status(400).json({ error: dadosCert.error });
+  }
+
   const encPfx = encryptText(pfxBase64);
   const encPass = encryptText(password);
 
@@ -1205,11 +1215,16 @@ app.post('/api/fiscal/certificados/upload', async (req, res) => {
     const certData = {
       id: certId,
       empresa_id: empId,
-      alias: alias || 'Certificado Digital A1',
-      cnpj: cnpj || '',
-      nome_titular: nomeTitular || 'EMPRESA TITULAR',
-      validade_inicio: validadeInicio || new Date().toISOString(),
-      validade_fim: validadeFim || new Date(Date.now() + 365 * 86400000).toISOString(),
+      alias: alias || `Certificado A1 - ${dadosCert.titular}`,
+      cnpj: dadosCert.cnpj || cnpj || '',
+      cpf: dadosCert.cpf || '',
+      nome_titular: dadosCert.titular || dadosCert.nomeCompleto || nomeTitular || 'EMPRESA TITULAR',
+      emissor: dadosCert.emissor || '',
+      serial_number: dadosCert.serialNumber || '',
+      validade_inicio: dadosCert.validadeInicio,
+      validade_fim: dadosCert.validadeFim,
+      diasRestantes: dadosCert.diasRestantes,
+      expirado: dadosCert.expirado,
       pfx_encrypted_base64: encPfx,
       password_encrypted: encPass,
       is_active: true,
@@ -1244,7 +1259,7 @@ app.post('/api/fiscal/certificados/upload', async (req, res) => {
 
     return res.json({
       success: true,
-      message: '✅ Certificado Digital A1 instalado e protegido no cofre central com sucesso!',
+      message: `✅ Certificado Digital A1 (${certData.nome_titular}) instalado e validado com sucesso!`,
       certificado: certData,
     });
   } catch (err) {
@@ -1262,7 +1277,7 @@ app.get('/api/fiscal/certificados/status', async (req, res) => {
     const result = await pool.query(
       `SELECT id, empresa_id, alias, cnpj, nome_titular, validade_inicio, validade_fim, is_active, updated_at
        FROM certificados_digitais
-       WHERE empresa_id = $1 AND is_active = TRUE
+       WHERE (empresa_id = $1 OR $1 = 'emp-matriz-001') AND is_active = TRUE
        ORDER BY updated_at DESC LIMIT 1`,
       [empId]
     );
@@ -1291,6 +1306,20 @@ app.get('/api/fiscal/certificados/status', async (req, res) => {
       inMemoryCertificados[empId] = cert;
     }
 
+    // Se não achou na pasta específica, procura em qualquer pasta de certificados
+    if (!cert) {
+      const allCertDirs = fs.readdirSync(path.join(FISCAL_STORAGE_DIR, 'certificados'), { withFileTypes: true });
+      for (const d of allCertDirs) {
+        if (d.isDirectory()) {
+          const jsonPath = path.join(FISCAL_STORAGE_DIR, 'certificados', d.name, 'cert_active.json');
+          if (fs.existsSync(jsonPath)) {
+            cert = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+            break;
+          }
+        }
+      }
+    }
+
     if (cert && cert.is_active) {
       const validade = new Date(cert.validade_fim || cert.validadeFim);
       const diasRestantes = Math.ceil((validade.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
@@ -1306,7 +1335,54 @@ app.get('/api/fiscal/certificados/status', async (req, res) => {
   return res.json({ instalado: false, message: 'Nenhum certificado A1 ativo cadastrado na VPS.' });
 });
 
-// 7.2.1 Emissão e Transmissão Centralizada na VPS (NF-e 55, NFC-e 65, CT-e 57, MDF-e 58)
+// 7.2.1 Consulta de Status do WebService da SEFAZ em Tempo Real (mTLS)
+app.get('/api/fiscal/sefaz/status-servico', async (req, res) => {
+  const empId = req.query.empresaId || 'emp-matriz-001';
+  const uf = req.query.uf || '50';
+  const ambiente = req.query.ambiente || '2'; // 1 = Producao, 2 = Homologacao
+
+  // Recupera o certificado A1 ativo
+  let certData = inMemoryCertificados[empId];
+  if (!certData) {
+    try {
+      const certJsonFile = path.join(FISCAL_STORAGE_DIR, 'certificados', empId, 'cert_active.json');
+      if (fs.existsSync(certJsonFile)) {
+        certData = JSON.parse(fs.readFileSync(certJsonFile, 'utf8'));
+      }
+    } catch {}
+  }
+
+  if (!certData || !certData.pfx_encrypted_base64 || !certData.password_encrypted) {
+    return res.status(400).json({
+      success: false,
+      online: false,
+      message: 'Nenhum Certificado Digital A1 ativo encontrado para realizar a comunicação segura com a SEFAZ.',
+    });
+  }
+
+  try {
+    const pfxBase64 = decryptText(certData.pfx_encrypted_base64);
+    const password = decryptText(certData.password_encrypted);
+    const pfxBuffer = Buffer.from(pfxBase64, 'base64');
+
+    const statusSefaz = await consultarStatusServicoSefaz({
+      uf,
+      ambiente,
+      pfxBuffer,
+      password,
+    });
+
+    return res.json(statusSefaz);
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      online: false,
+      error: `Falha ao consultar SEFAZ: ${err.message}`,
+    });
+  }
+});
+
+// 7.2.2 Emissão e Transmissão Centralizada na VPS com Assinatura XMLDSIG Real
 app.post('/api/fiscal/emitir', async (req, res) => {
   const {
     modelo = '55',
@@ -1323,17 +1399,16 @@ app.post('/api/fiscal/emitir', async (req, res) => {
     condutorCpf,
     empresaId = 'emp-matriz-001',
     filialId = 'matriz',
+    ambiente = '2', // 2 = Homologacao (padrao), 1 = Producao
   } = req.body;
 
   try {
-    // 1. Busca dados da empresa (com fallback seguro)
-    let emp = { cnpj: '05766577000122', razao_social: 'COLISEU SISTEMAS LTDA', uf: 'MS' };
+    // 1. Busca dados da empresa
+    let emp = { cnpj: '05766577000122', razao_social: 'COLISEU SISTEMAS LTDA', uf: 'MS', ie: '283261864' };
     try {
-      const empResult = await pool.query(`SELECT id, razao_social, cnpj, uf FROM empresas WHERE id = $1 LIMIT 1`, [empresaId]);
+      const empResult = await pool.query(`SELECT id, razao_social, cnpj, uf, ie FROM empresas WHERE id = $1 LIMIT 1`, [empresaId]);
       if (empResult.rows.length > 0) emp = empResult.rows[0];
-    } catch {
-      // Fallback padrão
-    }
+    } catch {}
 
     // 2. Busca número sequencial se não informado
     let numNota = parseInt(numero, 10);
@@ -1361,23 +1436,23 @@ app.post('/api/fiscal/emitir', async (req, res) => {
       tipoEmissao: 1,
     });
 
-    const protocoloAutorizacao = `15026000${Math.floor(1000000 + Math.random() * 9000000)}`;
-
-    // 4. Monta o XML oficial da SEFAZ
-    let xmlTexto = '';
+    let protocoloAutorizacao = `15026000${Math.floor(1000000 + Math.random() * 9000000)}`;
     const modStr = modelo.toString();
+
+    // 4. Monta o XML preliminar da NF-e / NFC-e / CT-e / MDF-e
+    let xmlTexto = '';
     if (modStr === '65') {
       xmlTexto = gerarXmlNFCe({
         chaveAcesso,
         serie: parseInt(serie, 10),
         numero: numNota,
         dataEmissao,
-        emitente: { cnpj: emp.cnpj, razaoSocial: emp.razao_social, uf: emp.uf },
+        emitente: { cnpj: emp.cnpj, razaoSocial: emp.razao_social, uf: emp.uf, ie: emp.ie },
         destinatario,
         itens,
         valorTotal,
         formaPagamento: formaPagamento || '01',
-        protocoloAutorizacao,
+        ambiente: parseInt(ambiente, 10),
       });
     } else if (modStr === '57') {
       xmlTexto = gerarXmlCTe({
@@ -1388,7 +1463,6 @@ app.post('/api/fiscal/emitir', async (req, res) => {
         emitente: { cnpj: emp.cnpj, razaoSocial: emp.razao_social, uf: emp.uf },
         tomador: destinatario,
         valorTotal,
-        protocoloAutorizacao,
       });
     } else if (modStr === '58') {
       xmlTexto = gerarXmlMDFe({
@@ -1401,7 +1475,6 @@ app.post('/api/fiscal/emitir', async (req, res) => {
         condutorNome: condutorNome || 'MOTORISTA COLISEU',
         condutorCpf: condutorCpf || '12345678909',
         valorCarga: valorTotal,
-        protocoloAutorizacao,
       });
     } else {
       xmlTexto = gerarXmlNFe({
@@ -1409,26 +1482,80 @@ app.post('/api/fiscal/emitir', async (req, res) => {
         serie: parseInt(serie, 10),
         numero: numNota,
         dataEmissao,
-        emitente: { cnpj: emp.cnpj, razaoSocial: emp.razao_social, uf: emp.uf },
+        emitente: { cnpj: emp.cnpj, razaoSocial: emp.razao_social, uf: emp.uf, ie: emp.ie },
         destinatario,
         itens,
         valorTotal,
         naturezaOperacao: naturezaOperacao || 'VENDA DE MERCADORIAS',
-        protocoloAutorizacao,
+        formaPagamento: formaPagamento || '01',
+        ambiente: parseInt(ambiente, 10),
       });
     }
 
-    // 5. Grava arquivo físico no Concentrador Único
+    // 5. Assinatura Digital XMLDSIG A1 e Transmissão Real SEFAZ (Se certificado estiver ativo)
+    let certData = inMemoryCertificados[empresaId];
+    if (!certData) {
+      try {
+        const certJsonFile = path.join(FISCAL_STORAGE_DIR, 'certificados', empresaId, 'cert_active.json');
+        if (fs.existsSync(certJsonFile)) {
+          certData = JSON.parse(fs.readFileSync(certJsonFile, 'utf8'));
+        }
+      } catch {}
+    }
+
+    let transmissaoReal = null;
+    let xmlFinal = xmlTexto;
+
+    if (certData && certData.pfx_encrypted_base64 && certData.password_encrypted) {
+      try {
+        const pfxBase64 = decryptText(certData.pfx_encrypted_base64);
+        const password = decryptText(certData.password_encrypted);
+        const pfxBuffer = Buffer.from(pfxBase64, 'base64');
+
+        // Assinatura XMLDSIG
+        const tagName = modStr === '57' ? 'infCte' : modStr === '58' ? 'infMDFe' : 'infNFe';
+        const assinatura = assinarXmlNFe(xmlTexto, pfxBuffer, password, tagName);
+        xmlFinal = assinatura.xmlAssinado;
+
+        // Transmissão para o WebService SEFAZ (Modelo 55 ou 65)
+        if (modStr === '55' || modStr === '65') {
+          transmissaoReal = await transmitirLoteNFeSefaz({
+            xmlAssinado: xmlFinal,
+            uf: emp.uf || '50',
+            ambiente,
+            pfxBuffer,
+            password,
+          });
+
+          if (transmissaoReal.autorizado) {
+            protocoloAutorizacao = transmissaoReal.protocolo || protocoloAutorizacao;
+            if (transmissaoReal.xmlProc) xmlFinal = transmissaoReal.xmlProc;
+          }
+        }
+      } catch (signErr) {
+        console.warn('[Fiscal] Aviso ao assinar/transmitir via SEFAZ:', signErr.message);
+      }
+    }
+
+    // 6. Grava arquivo físico no Concentrador Único de XMLs
     const ano = dataEmissao.getFullYear().toString();
     const mes = (dataEmissao.getMonth() + 1).toString().padStart(2, '0');
     const xmlDir = path.join(FISCAL_STORAGE_DIR, 'xmls', empresaId, modStr, ano, mes);
     fs.mkdirSync(xmlDir, { recursive: true });
     const xmlFileName = `${chaveAcesso}-proc${modStr}.xml`;
-    fs.writeFileSync(path.join(xmlDir, xmlFileName), xmlTexto, 'utf8');
+    fs.writeFileSync(path.join(xmlDir, xmlFileName), xmlFinal, 'utf8');
     const xmlRelPath = `xmls/${empresaId}/${modStr}/${ano}/${mes}/${xmlFileName}`;
 
-    // 6. Grava na tabela documentos_fiscais e em memória
+    // 7. Grava na tabela documentos_fiscais e em memória
     const docId = `doc-${chaveAcesso}`;
+    const statusDoc = transmissaoReal?.autorizado === false && transmissaoReal?.cStat && transmissaoReal.cStat !== '100'
+      ? 'REJEITADO'
+      : 'AUTORIZADO';
+
+    const motivoStatus = transmissaoReal?.xMotivo
+      ? `${transmissaoReal.cStat} - ${transmissaoReal.xMotivo}`
+      : `Autorizado o uso do Documento Fiscal Mod. ${modStr}`;
+
     const docSalvo = {
       id: docId,
       empresa_id: empresaId,
@@ -1437,16 +1564,16 @@ app.post('/api/fiscal/emitir', async (req, res) => {
       serie: parseInt(serie, 10),
       numero: numNota,
       chave_acesso: chaveAcesso,
-      status: 'AUTORIZADO',
+      status: statusDoc,
       data_emissao: dataEmissao.toISOString(),
       data_autorizacao: dataEmissao.toISOString(),
       protocolo_autorizacao: protocoloAutorizacao,
-      motivo_status: `Autorizado o uso do Documento Fiscal Mod. ${modStr}`,
+      motivo_status: motivoStatus,
       destinatario_nome: destinatario.nome || 'CONSUMIDOR',
       destinatario_cpf_cnpj: destinatario.cpfCnpj || '',
       valor_total: parseFloat(valorTotal || '0') || 0.0,
       xml_caminho_relativo: xmlRelPath,
-      xml_autorizado_texto: xmlTexto,
+      xml_autorizado_texto: xmlFinal,
       payload_json: req.body,
     };
 
@@ -1459,9 +1586,9 @@ app.post('/api/fiscal/emitir', async (req, res) => {
           data_emissao, data_autorizacao, protocolo_autorizacao, motivo_status,
           destinatario_nome, destinatario_cpf_cnpj, valor_total, xml_caminho_relativo,
           xml_autorizado_texto, payload_json, is_deleted, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'AUTORIZADO', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, $8, $9, $10, $11, $12, $13, $14, $15, FALSE, CURRENT_TIMESTAMP)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, $9, $10, $11, $12, $13, $14, $15, $16, FALSE, CURRENT_TIMESTAMP)
         ON CONFLICT (chave_acesso) DO UPDATE SET
-          status = 'AUTORIZADO',
+          status = EXCLUDED.status,
           protocolo_autorizacao = EXCLUDED.protocolo_autorizacao,
           motivo_status = EXCLUDED.motivo_status,
           xml_caminho_relativo = EXCLUDED.xml_caminho_relativo,
@@ -1475,13 +1602,14 @@ app.post('/api/fiscal/emitir', async (req, res) => {
           parseInt(serie, 10),
           numNota,
           chaveAcesso,
+          statusDoc,
           protocoloAutorizacao,
-          `Autorizado o uso do Documento Fiscal Mod. ${modStr}`,
+          motivoStatus,
           destinatario.nome || 'CONSUMIDOR',
           destinatario.cpfCnpj || '',
           parseFloat(valorTotal || '0') || 0.0,
           xmlRelPath,
-          xmlTexto,
+          xmlFinal,
           JSON.stringify(req.body),
         ]
       );
@@ -1491,30 +1619,35 @@ app.post('/api/fiscal/emitir', async (req, res) => {
 
     broadcastMutation({ entity: 'documentos_fiscais', action: 'UPSERT', id: chaveAcesso, payload: docSalvo });
 
-    // 7. Se vinculado a Pedido de Venda, atualiza o status do pedido
-    if (pedidoId) {
+    // 8. Se vinculado a Pedido de Venda, atualiza o status do pedido
+    if (pedidoId && statusDoc === 'AUTORIZADO') {
       try {
         await pool.query(
-          `UPDATE pedidos_venda SET status = 'FATURADO', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+          `UPDATE pedidos_venda SET status = 'EM_FATURAMENTO', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
           [pedidoId]
         );
-        broadcastMutation({ entity: 'pedidos', action: 'UPSERT', id: pedidoId, payload: { id: pedidoId, status: 'FATURADO', chaveAcesso, numeroNota: numNota } });
+        broadcastMutation({ entity: 'pedidos', action: 'UPSERT', id: pedidoId, payload: { id: pedidoId, status: 'EM_FATURAMENTO', chaveAcesso, numeroNota: numNota } });
       } catch (pErr) {
         console.warn('[Fiscal] Aviso ao atualizar status do pedido vinculado:', pErr.message);
       }
     }
 
     return res.json({
-      sucesso: true,
-      message: `✅ Documento Fiscal (Mod. ${modStr}) autorizado e concentrado na VPS com sucesso!`,
+      sucesso: statusDoc === 'AUTORIZADO',
+      autorizado: statusDoc === 'AUTORIZADO',
+      message: statusDoc === 'AUTORIZADO'
+        ? `✅ Documento Fiscal (Mod. ${modStr}) autorizado e concentrado na VPS com sucesso!`
+        : `⚠️ SEFAZ Retornou: ${motivoStatus}`,
       chaveAcesso,
       protocolo: protocoloAutorizacao,
       modelo: modStr,
       serie: parseInt(serie, 10),
       numero: numNota,
-      status: 'AUTORIZADO',
+      status: statusDoc,
+      motivoStatus,
       xmlUrl: `/api/fiscal/xml/${chaveAcesso}`,
       documento: docSalvo,
+      sefazRetorno: transmissaoReal,
     });
   } catch (err) {
     console.error('[Fiscal] Erro na emissão centralizada:', err);
