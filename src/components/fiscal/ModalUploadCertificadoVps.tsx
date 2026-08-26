@@ -68,6 +68,7 @@ export const ModalUploadCertificadoVps: React.FC<ModalUploadCertificadoVpsProps>
       });
 
       if (res.success) {
+        alert(res.message || '✅ Certificado Digital A1 instalado e salvo com sucesso no cofre da VPS!');
         const novoStatus = await fiscalCloudService.getCertificadoStatus();
         onSuccess(novoStatus);
         onClose();
