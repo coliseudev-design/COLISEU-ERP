@@ -277,19 +277,9 @@ export async function consultarStatusServicoSefaz({
 
   const urlWS = SEFAZ_SERVIDORES.MS[ambKey]?.statusServico || SEFAZ_SERVIDORES.SVRS[ambKey]?.statusServico;
 
-  // Monta o Envelope SOAP 1.2
-  const soapEnvelope = `<?xml version="1.0" encoding="utf-8"?>
-<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
-  <soap12:Body>
-    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeStatusServico4">
-      <consStatServ versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe">
-        <tpAmb>${tpAmb}</tpAmb>
-        <cUF>${cUF}</cUF>
-        <xServ>STATUS</xServ>
-      </consStatServ>
-    </nfeDadosMsg>
-  </soap12:Body>
-</soap12:Envelope>`;
+  // Monta o Envelope SOAP 1.2 sem quebras de linha ou caracteres de edição (exigência estrita do schema SEFAZ)
+  const consStatServXml = `<consStatServ xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00"><tpAmb>${tpAmb}</tpAmb><cUF>${cUF}</cUF><xServ>STATUS</xServ></consStatServ>`;
+  const soapEnvelope = `<?xml version="1.0" encoding="utf-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeStatusServico4">${consStatServXml}</nfeDadosMsg></soap12:Body></soap12:Envelope>`;
 
   try {
     const httpsAgent = new https.Agent({
@@ -398,17 +388,10 @@ export async function transmitirLoteNFeSefaz({
 
   const urlWS = SEFAZ_SERVIDORES.MS[ambKey]?.autorizacao || SEFAZ_SERVIDORES.SVRS[ambKey]?.autorizacao;
 
-  // Monta o lote enviNFe 4.00 com indSinc = 1 (processamento síncrono)
-  const loteXml = `<enviNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00"><idLote>${idLote}</idLote><indSinc>1</indSinc>${xmlAssinado}</enviNFe>`;
-
-  const soapEnvelope = `<?xml version="1.0" encoding="utf-8"?>
-<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
-  <soap12:Body>
-    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4">
-      ${loteXml}
-    </nfeDadosMsg>
-  </soap12:Body>
-</soap12:Envelope>`;
+  // Minificar XML da NFe assinado removendo espaços/quebras entre tags
+  const xmlMinificado = xmlAssinado.replace(/>\s+</g, '><').trim();
+  const loteXml = `<enviNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00"><idLote>${idLote}</idLote><indSinc>1</indSinc>${xmlMinificado}</enviNFe>`;
+  const soapEnvelope = `<?xml version="1.0" encoding="utf-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4">${loteXml}</nfeDadosMsg></soap12:Body></soap12:Envelope>`;
 
   try {
     const httpsAgent = new https.Agent({
