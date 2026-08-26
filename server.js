@@ -1268,68 +1268,89 @@ app.post('/api/fiscal/certificados/upload', async (req, res) => {
   }
 });
 
-// 7.2 Status do Certificado Ativo
-app.get('/api/fiscal/certificados/status', async (req, res) => {
-  const empId = req.query.empresaId || 'emp-matriz-001';
+// Helper para obter o certificado A1 ativo com chaves encriptadas (Postgres + Memória + Disco)
+async function getActiveCertificadoData(empId = 'emp-matriz-001') {
+  // 1. Tenta memória
+  let cert = inMemoryCertificados[empId];
+  if (cert && cert.pfx_encrypted_base64 && cert.password_encrypted) {
+    return cert;
+  }
 
-  // 1. Tentar consultar no PostgreSQL
+  // 2. Tenta PostgreSQL
   try {
-    const result = await pool.query(
-      `SELECT id, empresa_id, alias, cnpj, nome_titular, validade_inicio, validade_fim, is_active, updated_at
+    const res = await pool.query(
+      `SELECT id, empresa_id, alias, cnpj, nome_titular, validade_inicio, validade_fim,
+              pfx_encrypted_base64, password_encrypted, is_active, updated_at
        FROM certificados_digitais
-       WHERE (empresa_id = $1 OR $1 = 'emp-matriz-001') AND is_active = TRUE
+       WHERE (empresa_id = $1 OR is_active = TRUE)
        ORDER BY updated_at DESC LIMIT 1`,
       [empId]
     );
-
-    if (result.rows.length > 0) {
-      const cert = result.rows[0];
-      const validade = new Date(cert.validade_fim);
-      const diasRestantes = Math.ceil((validade.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-      return res.json({
-        instalado: true,
-        certificado: { ...cert, diasRestantes, expirado: diasRestantes <= 0 },
-      });
+    if (res.rows.length > 0) {
+      cert = res.rows[0];
+      inMemoryCertificados[empId] = cert;
+      return cert;
     }
   } catch (pgErr) {
-    console.warn('[Fiscal] Aviso ao buscar certificado no Postgres, consultando armazenamento local:', pgErr.message);
+    console.warn('[Fiscal] Aviso ao buscar certificado no Postgres:', pgErr.message);
   }
 
-  // 2. Fallback de Alta Disponibilidade: Armazenamento em Disco da VPS
+  // 3. Tenta Disco da VPS
   try {
     const certDir = path.join(FISCAL_STORAGE_DIR, 'certificados', empId);
     const certJsonFile = path.join(certDir, 'cert_active.json');
-
-    let cert = inMemoryCertificados[empId];
-    if (!cert && fs.existsSync(certJsonFile)) {
+    if (fs.existsSync(certJsonFile)) {
       cert = JSON.parse(fs.readFileSync(certJsonFile, 'utf8'));
-      inMemoryCertificados[empId] = cert;
+      if (cert && cert.pfx_encrypted_base64 && cert.password_encrypted) {
+        inMemoryCertificados[empId] = cert;
+        return cert;
+      }
     }
 
-    // Se não achou na pasta específica, procura em qualquer pasta de certificados
-    if (!cert) {
-      const allCertDirs = fs.readdirSync(path.join(FISCAL_STORAGE_DIR, 'certificados'), { withFileTypes: true });
-      for (const d of allCertDirs) {
+    if (fs.existsSync(path.join(FISCAL_STORAGE_DIR, 'certificados'))) {
+      const allDirs = fs.readdirSync(path.join(FISCAL_STORAGE_DIR, 'certificados'), { withFileTypes: true });
+      for (const d of allDirs) {
         if (d.isDirectory()) {
-          const jsonPath = path.join(FISCAL_STORAGE_DIR, 'certificados', d.name, 'cert_active.json');
-          if (fs.existsSync(jsonPath)) {
-            cert = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
-            break;
+          const jsonP = path.join(FISCAL_STORAGE_DIR, 'certificados', d.name, 'cert_active.json');
+          if (fs.existsSync(jsonP)) {
+            cert = JSON.parse(fs.readFileSync(jsonP, 'utf8'));
+            if (cert && cert.pfx_encrypted_base64 && cert.password_encrypted) {
+              inMemoryCertificados[empId] = cert;
+              return cert;
+            }
           }
         }
       }
     }
-
-    if (cert && cert.is_active) {
-      const validade = new Date(cert.validade_fim || cert.validadeFim);
-      const diasRestantes = Math.ceil((validade.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-      return res.json({
-        instalado: true,
-        certificado: { ...cert, diasRestantes, expirado: diasRestantes <= 0 },
-      });
-    }
   } catch (diskErr) {
-    console.warn('[Fiscal] Erro ao ler certificado do disco:', diskErr.message);
+    console.warn('[Fiscal] Aviso ao ler disco:', diskErr.message);
+  }
+
+  return null;
+}
+
+// 7.2 Status do Certificado Ativo
+app.get('/api/fiscal/certificados/status', async (req, res) => {
+  const empId = req.query.empresaId || 'emp-matriz-001';
+  const cert = await getActiveCertificadoData(empId);
+
+  if (cert && cert.is_active) {
+    const validade = new Date(cert.validade_fim || cert.validadeFim);
+    const diasRestantes = Math.ceil((validade.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    return res.json({
+      instalado: true,
+      certificado: {
+        id: cert.id,
+        empresa_id: cert.empresa_id,
+        alias: cert.alias,
+        cnpj: cert.cnpj,
+        nome_titular: cert.nome_titular || cert.nomeTitular,
+        validade_inicio: cert.validade_inicio || cert.validadeInicio,
+        validade_fim: cert.validade_fim || cert.validadeFim,
+        diasRestantes,
+        expirado: diasRestantes <= 0,
+      },
+    });
   }
 
   return res.json({ instalado: false, message: 'Nenhum certificado A1 ativo cadastrado na VPS.' });
@@ -1341,16 +1362,7 @@ app.get('/api/fiscal/sefaz/status-servico', async (req, res) => {
   const uf = req.query.uf || '50';
   const ambiente = req.query.ambiente || '2'; // 1 = Producao, 2 = Homologacao
 
-  // Recupera o certificado A1 ativo
-  let certData = inMemoryCertificados[empId];
-  if (!certData) {
-    try {
-      const certJsonFile = path.join(FISCAL_STORAGE_DIR, 'certificados', empId, 'cert_active.json');
-      if (fs.existsSync(certJsonFile)) {
-        certData = JSON.parse(fs.readFileSync(certJsonFile, 'utf8'));
-      }
-    } catch {}
-  }
+  const certData = await getActiveCertificadoData(empId);
 
   if (!certData || !certData.pfx_encrypted_base64 || !certData.password_encrypted) {
     return res.status(400).json({
@@ -1493,16 +1505,7 @@ app.post('/api/fiscal/emitir', async (req, res) => {
     }
 
     // 5. Assinatura Digital XMLDSIG A1 e Transmissão Real SEFAZ (Se certificado estiver ativo)
-    let certData = inMemoryCertificados[empresaId];
-    if (!certData) {
-      try {
-        const certJsonFile = path.join(FISCAL_STORAGE_DIR, 'certificados', empresaId, 'cert_active.json');
-        if (fs.existsSync(certJsonFile)) {
-          certData = JSON.parse(fs.readFileSync(certJsonFile, 'utf8'));
-        }
-      } catch {}
-    }
-
+    const certData = await getActiveCertificadoData(empresaId);
     let transmissaoReal = null;
     let xmlFinal = xmlTexto;
 
