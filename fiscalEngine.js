@@ -60,53 +60,44 @@ export function gerarChaveAcesso({
 
 export function extrairDadosCertificadoPfx(pfxBuffer, password) {
   try {
-    const p12Der = forge.util.createBuffer(pfxBuffer.toString('binary'));
+    const p12Der = pfxBuffer.toString('binary');
     const p12Asn1 = forge.asn1.fromDer(p12Der);
-    const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, password);
+    const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, password);
 
-    // Obter cert bag e key bag
-    let certBag = null;
-    let keyBag = null;
+    // Obter cert bags
+    const certBags = p12.getBags({ bagType: forge.pki.oids.certBag })[forge.pki.oids.certBag] || [];
+    if (certBags.length === 0) {
+      throw new Error('Nenhum certificado X.509 encontrado no arquivo .PFX');
+    }
 
-    for (const bagType in p12.bags) {
-      if (p12.bags[bagType]) {
-        for (const bag of p12.bags[bagType]) {
-          if (bag.cert) certBag = bag;
-          if (bag.key) keyBag = bag;
+    // Identifica o certificado folha (end-entity)
+    let leafCert = certBags[0].cert;
+    for (const b of certBags) {
+      if (b.cert) {
+        const isCA = b.cert.extensions?.some((ext) => ext.name === 'basicConstraints' && ext.cA);
+        if (!isCA) {
+          leafCert = b.cert;
+          break;
         }
       }
     }
 
-    if (!certBag || !certBag.cert) {
-      throw new Error('Certificado X.509 não encontrado dentro do arquivo .PFX.');
-    }
+    // Obter chave privada (pode ser pkcs8ShroudedKeyBag ou keyBag)
+    const keyBags = (p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag })[forge.pki.oids.pkcs8ShroudedKeyBag] || [])
+      .concat(p12.getBags({ bagType: forge.pki.oids.keyBag })[forge.pki.oids.keyBag] || []);
 
-    const cert = certBag.cert;
-    const certPem = forge.pki.certificateToPem(cert);
-    const certDer = forge.asn1.toDer(forge.pki.certificateToAsn1(cert)).getBytes();
+    const key = keyBags[0]?.key;
+    const privateKeyPem = key ? forge.pki.privateKeyToPem(key) : '';
+    const certPem = forge.pki.certificateToPem(leafCert);
+    const certDer = forge.asn1.toDer(forge.pki.certificateToAsn1(leafCert)).getBytes();
     const certBase64 = forge.util.encode64(certDer);
 
-    let privateKeyPem = '';
-    if (keyBag && keyBag.key) {
-      privateKeyPem = forge.pki.privateKeyToPem(keyBag.key);
-    }
+    const cnField = leafCert.subject.getField('CN');
+    const titular = cnField?.value || '';
 
-    // Extração de CNPJ / CPF e Nome Titular do Subject
-    let titular = '';
+    // Extrair CNPJ ou CPF do titular (formato ICP-Brasil: "EMPRESA:00000000000000")
     let cnpj = '';
     let cpf = '';
-    let email = '';
-
-    for (const attr of cert.subject.attributes) {
-      if (attr.name === 'commonName' || attr.type === '2.5.4.3') {
-        titular = attr.value;
-      }
-      if (attr.name === 'emailAddress') {
-        email = attr.value;
-      }
-    }
-
-    // Busca de CNPJ no CN (padrão ICP-Brasil: "RAZAO SOCIAL:00000000000000")
     if (titular) {
       const matchCnpj = titular.match(/:(\d{14})/);
       if (matchCnpj) {
@@ -117,15 +108,13 @@ export function extrairDadosCertificadoPfx(pfxBuffer, password) {
       }
     }
 
-    const validadeInicio = cert.validity.notBefore;
-    const validadeFim = cert.validity.notAfter;
+    const validadeInicio = leafCert.validity.notBefore;
+    const validadeFim = leafCert.validity.notAfter;
     const diasRestantes = Math.ceil((validadeFim.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
     const expirado = diasRestantes <= 0;
 
-    let emissor = '';
-    for (const attr of cert.issuer.attributes) {
-      if (attr.name === 'commonName') emissor = attr.value;
-    }
+    const emissorField = leafCert.issuer.getField('CN');
+    const emissor = emissorField?.value || 'Autoridade Certificadora ICP-Brasil';
 
     return {
       success: true,
@@ -133,9 +122,8 @@ export function extrairDadosCertificadoPfx(pfxBuffer, password) {
       nomeCompleto: titular,
       cnpj,
       cpf,
-      email,
       emissor,
-      serialNumber: cert.serialNumber,
+      serialNumber: leafCert.serialNumber,
       validadeInicio: validadeInicio.toISOString(),
       validadeFim: validadeFim.toISOString(),
       diasRestantes,
@@ -145,9 +133,13 @@ export function extrairDadosCertificadoPfx(pfxBuffer, password) {
       privateKeyPem,
     };
   } catch (err) {
+    let msg = err.message || 'Falha ao abrir certificado A1.';
+    if (msg.includes('MAC could not be verified') || msg.includes('Invalid password')) {
+      msg = 'Senha do certificado incorreta. Verifique a senha digitada.';
+    }
     return {
       success: false,
-      error: `Falha ao abrir certificado A1 (.pfx): ${err.message || 'Senha incorreta ou arquivo corrompido'}`,
+      error: `Falha ao abrir certificado A1 (.pfx): ${msg}`,
     };
   }
 }
