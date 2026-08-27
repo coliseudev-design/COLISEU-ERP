@@ -220,82 +220,65 @@ export const GerenciamentoNFePage: React.FC = () => {
       return;
     }
 
-    if (config.modoOperacao === 'TECNOSPEED') {
-      try {
-        const res = await invoke<string>('tecnospeed_inutilizar_nfe_cmd', {
-          cnpj: config.cnpjEmitente,
-          ano: Number(anoInut),
+    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+      if (config.modoOperacao === 'TECNOSPEED') {
+        try {
+          const res = await invoke<string>('tecnospeed_inutilizar_nfe_cmd', {
+            cnpj: config.cnpjEmitente,
+            ano: Number(anoInut),
+            modelo: 55,
+            serie: Number(serieInut),
+            numIni: Number(numIniInut),
+            numFim: Number(numFimInut),
+            justificativa: justInut,
+            uf: obterSiglaUf(config.ufWebService),
+            ambiente: config.ambienteDestino === 'PRODUÇÃO' ? 1 : 2,
+            certName: config.certificadoDigital || '',
+          });
+          logRetorno(`✅ Inutilização homologada via TecnoSpeed: ${res}`);
+          showToast(`Numeração ${numIniInut} a ${numFimInut} inutilizada com sucesso!`);
+          setIsModalInutilizarOpen(false);
+        } catch (e: any) {
+          logRetorno(`❌ Falha na inutilização TecnoSpeed: ${String(e)}`);
+          showToast(`Erro TecnoSpeed: ${String(e)}`);
+        }
+        return;
+      }
+    }
+
+    // Modo Web / Nuvem VPS (mTLS Direto SEFAZ inutNFe)
+    try {
+      logRetorno(`Enviando Pedido de Inutilização para SEFAZ MS... Faixa: ${numIniInut} a ${numFimInut}`);
+      const res = await fetch('/api/fiscal/inutilizar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ano: anoInut,
           modelo: 55,
-          serie: Number(serieInut),
-          numIni: Number(numIniInut),
-          numFim: Number(numFimInut),
+          serie: serieInut,
+          nNFIni: numIniInut,
+          nNFFin: numFimInut,
           justificativa: justInut,
-          uf: obterSiglaUf(config.ufWebService),
+          empresaId: 'emp-matriz-001',
           ambiente: config.ambienteDestino === 'PRODUÇÃO' ? 1 : 2,
-          certName: config.certificadoDigital || '',
-        });
-        logRetorno(`✅ Inutilização homologada via TecnoSpeed: ${res}`);
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && (data.inutilizado || data.sucesso)) {
+        logRetorno(
+          `✅ Inutilização HOMOLOGADA na SEFAZ! Protocolo: ${data.protocolo} | Status: cStat ${data.cStat} - ${data.xMotivo}`
+        );
         showToast(`Numeração ${numIniInut} a ${numFimInut} inutilizada com sucesso!`);
         setIsModalInutilizarOpen(false);
-      } catch (e: any) {
-        logRetorno(`❌ Falha na inutilização TecnoSpeed: ${String(e)}`);
-        showToast(`Erro TecnoSpeed: ${String(e)}`);
+      } else {
+        logRetorno(`❌ Rejeição SEFAZ na Inutilização: ${data.error || data.xMotivo || 'Falha ao inutilizar'}`);
+        alert(data.error || `Rejeição SEFAZ [cStat ${data.cStat}]: ${data.xMotivo}`);
       }
-      return;
+    } catch (netErr: any) {
+      logRetorno(`❌ Erro de rede ao transmitir inutilização: ${netErr.message}`);
+      alert(`Falha na comunicação de inutilização: ${netErr.message}`);
     }
-
-    if (config.modoOperacao === 'NUVEM_FISCAL') {
-      try {
-        const res = await invoke<string>('nuvemfiscal_inutilizar_nfe_cmd', {
-          clientId: config.nuvemFiscalClientId,
-          clientSecret: config.nuvemFiscalClientSecret,
-          cnpj: config.cnpjEmitente,
-          ano: Number(anoInut),
-          serie: Number(serieInut),
-          numIni: Number(numIniInut),
-          numFim: Number(numFimInut),
-          justificativa: justInut,
-          sandbox: config.nuvemFiscalAmbiente === 'SANDBOX',
-        });
-        logRetorno(`✅ Inutilização homologada via Nuvem Fiscal: ${res}`);
-        showToast('Faixa inutilizada na Nuvem Fiscal!');
-        setIsModalInutilizarOpen(false);
-      } catch (e: any) {
-        logRetorno(`❌ Falha na inutilização Nuvem Fiscal: ${String(e)}`);
-        showToast(`Erro Nuvem Fiscal: ${String(e)}`);
-      }
-      return;
-    }
-
-    if (config.modoOperacao === 'ACBR') {
-      try {
-        const res = await invoke<string>('acbr_inutilizar_nfe_cmd', {
-          cnpj: config.cnpjEmitente,
-          justificativa: justInut,
-          ano: Number(anoInut),
-          modelo: 55,
-          serie: Number(serieInut),
-          numIni: Number(numIniInut),
-          numFim: Number(numFimInut),
-          host: config.hostAcbr || '127.0.0.1',
-          port: Number(config.portaAcbr) || 3434,
-        });
-        logRetorno(`✅ Inutilização homologada via ACBr: ${res}`);
-        showToast(`Numeração ${numIniInut} a ${numFimInut} inutilizada com sucesso!`);
-        setIsModalInutilizarOpen(false);
-      } catch (e: any) {
-        logRetorno(`❌ Falha na inutilização ACBr: ${String(e)}`);
-        showToast(`Erro ACBr: ${String(e)}`);
-      }
-      return;
-    }
-
-    const protocolo = `15026000${Math.floor(1000000 + Math.random() * 9000000)}`;
-    logRetorno(
-      `✅ Inutilização de Faixa Homologada na SEFAZ: Ano=${anoInut}, Série=${serieInut}, Nº ${numIniInut} até ${numFimInut}. Protocolo: ${protocolo} (cStat 102 - Inutilização de número homologado).`
-    );
-    showToast(`Numeração ${numIniInut} a ${numFimInut} inutilizada com sucesso!`);
-    setIsModalInutilizarOpen(false);
   };
 
   const handleExecutarCancelamento = async () => {
@@ -385,80 +368,63 @@ export const GerenciamentoNFePage: React.FC = () => {
       return;
     }
 
-    if (config.modoOperacao === 'TECNOSPEED') {
-      try {
-        const res = await invoke<string>('tecnospeed_carta_correcao_cmd', {
-          chave: chaveCce,
-          correcao: textoCce,
-          seq: 1,
-          cnpj: config.cnpjEmitente,
-          uf: obterSiglaUf(config.ufWebService),
+    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+      if (config.modoOperacao === 'TECNOSPEED') {
+        try {
+          const res = await invoke<string>('tecnospeed_carta_correcao_cmd', {
+            chave: chaveCce,
+            correcao: textoCce,
+            seq: 1,
+            cnpj: config.cnpjEmitente,
+            uf: obterSiglaUf(config.ufWebService),
+            ambiente: config.ambienteDestino === 'PRODUÇÃO' ? 1 : 2,
+            certName: config.certificadoDigital || '',
+          });
+          logRetorno(`✅ Carta de Correção homologada via TecnoSpeed: ${res}`);
+          showToast('Carta de Correção (CC-e) emitida com sucesso!');
+          setIsModalCceOpen(false);
+          setChaveCce('');
+          setTextoCce('');
+        } catch (e: any) {
+          logRetorno(`❌ Falha na CC-e TecnoSpeed: ${String(e)}`);
+          showToast(`Erro TecnoSpeed: ${String(e)}`);
+        }
+        return;
+      }
+    }
+
+    // Modo Web / Nuvem VPS (mTLS Direto SEFAZ Evento 110110)
+    try {
+      logRetorno(`Enviando Evento 110110 de CC-e para SEFAZ MS... Chave: ${chaveCce}`);
+      const res = await fetch('/api/fiscal/cce', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chaveAcesso: chaveCce,
+          textoCorrecao: textoCce,
+          sequenciaEvento: 1,
+          empresaId: 'emp-matriz-001',
           ambiente: config.ambienteDestino === 'PRODUÇÃO' ? 1 : 2,
-          certName: config.certificadoDigital || '',
-        });
-        logRetorno(`✅ Carta de Correção homologada via TecnoSpeed: ${res}`);
-        showToast('Carta de Correção (CC-e) emitida com sucesso!');
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && (data.autorizado || data.sucesso)) {
+        logRetorno(
+          `✅ Carta de Correção HOMOLOGADA na SEFAZ! Protocolo: ${data.protocoloEvento} | Status: cStat ${data.cStat} - ${data.xMotivo}`
+        );
+        showToast(`CC-e Homologada com sucesso! Protocolo: ${data.protocoloEvento}`);
         setIsModalCceOpen(false);
         setChaveCce('');
         setTextoCce('');
-      } catch (e: any) {
-        logRetorno(`❌ Falha na CC-e TecnoSpeed: ${String(e)}`);
-        showToast(`Erro TecnoSpeed: ${String(e)}`);
+      } else {
+        logRetorno(`❌ Rejeição SEFAZ na CC-e: ${data.error || data.xMotivo || 'Falha ao emitir CC-e'}`);
+        alert(data.error || `Rejeição SEFAZ [cStat ${data.cStat}]: ${data.xMotivo}`);
       }
-      return;
+    } catch (netErr: any) {
+      logRetorno(`❌ Erro de rede ao transmitir CC-e: ${netErr.message}`);
+      alert(`Falha na comunicação da CC-e: ${netErr.message}`);
     }
-
-    if (config.modoOperacao === 'NUVEM_FISCAL') {
-      try {
-        const res = await invoke<string>('nuvemfiscal_carta_correcao_cmd', {
-          clientId: config.nuvemFiscalClientId,
-          clientSecret: config.nuvemFiscalClientSecret,
-          idNfe: chaveCce,
-          correcao: textoCce,
-          sandbox: config.nuvemFiscalAmbiente === 'SANDBOX',
-        });
-        logRetorno(`✅ Carta de Correção homologada via Nuvem Fiscal: ${res}`);
-        showToast('Carta de Correção (CC-e) emitida com sucesso!');
-        setIsModalCceOpen(false);
-        setChaveCce('');
-        setTextoCce('');
-      } catch (e: any) {
-        logRetorno(`❌ Falha na CC-e Nuvem Fiscal: ${String(e)}`);
-        showToast(`Erro Nuvem Fiscal: ${String(e)}`);
-      }
-      return;
-    }
-
-    if (config.modoOperacao === 'ACBR') {
-      try {
-        const res = await invoke<string>('acbr_carta_correcao_cmd', {
-          chave: chaveCce,
-          texto: textoCce,
-          cnpj: config.cnpjEmitente,
-          seq: 1,
-          host: config.hostAcbr || '127.0.0.1',
-          port: Number(config.portaAcbr) || 3434,
-        });
-        logRetorno(`✅ Carta de Correção homologada via ACBr: ${res}`);
-        showToast('Carta de Correção (CC-e) emitida com sucesso!');
-        setIsModalCceOpen(false);
-        setChaveCce('');
-        setTextoCce('');
-      } catch (e: any) {
-        logRetorno(`❌ Falha na CC-e ACBr: ${String(e)}`);
-        showToast(`Erro ACBr: ${String(e)}`);
-      }
-      return;
-    }
-
-    const protocolo = `15026000${Math.floor(1000000 + Math.random() * 9000000)}`;
-    logRetorno(
-      `✅ Carta de Correção Eletrônica (CC-e) Registrada: Chave=${chaveCce}, Seq=01, Protocolo=${protocolo} (cStat 135 - Evento homologado e vinculado a NF-e).`
-    );
-    showToast('Carta de Correção (CC-e) emitida com sucesso!');
-    setIsModalCceOpen(false);
-    setChaveCce('');
-    setTextoCce('');
   };
 
   const handleExecutarConsultaChave = async () => {

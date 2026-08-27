@@ -18,6 +18,8 @@ import {
   consultarStatusServicoSefaz,
   transmitirLoteNFeSefaz,
   transmitirEventoCancelamentoSefaz,
+  transmitirCartaCorrecaoSefaz,
+  transmitirInutilizacaoSefaz,
 } from './fiscalEngine.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -2163,6 +2165,136 @@ app.get('/api/fiscal/xml-cancelamento/:chave', async (req, res) => {
     return res.status(404).json({ error: 'XML oficial de evento de cancelamento não localizado.' });
   } catch (err) {
     return res.status(500).json({ error: 'Erro ao buscar XML de cancelamento: ' + err.message });
+  }
+});
+
+// 7.9 Transmissão do Evento 110110 de Carta de Correção Eletrônica (CC-e)
+app.post('/api/fiscal/cce', async (req, res) => {
+  const { chaveAcesso, textoCorrecao, sequenciaEvento, empresaId, ambiente } = req.body;
+  if (!chaveAcesso || !textoCorrecao || textoCorrecao.length < 15) {
+    return res.status(400).json({ error: 'Chave de acesso e texto da correção (mínimo 15 caracteres) são obrigatórios.' });
+  }
+
+  const empId = empresaId || 'emp-matriz-001';
+  const certData = await getActiveCertificadoData(empId);
+  if (!certData || !certData.pfx_encrypted_base64 || !certData.password_encrypted) {
+    return res.status(400).json({ error: 'Certificado Digital A1 não encontrado no cofre para assinar a CC-e.' });
+  }
+
+  try {
+    const pfxBase64 = decryptText(certData.pfx_encrypted_base64);
+    const password = decryptText(certData.password_encrypted);
+    const pfxBuffer = Buffer.from(pfxBase64, 'base64');
+
+    const resultSefaz = await transmitirCartaCorrecaoSefaz({
+      chaveAcesso,
+      textoCorrecao,
+      cnpjEmitente: certData.cnpj || '68148349000109',
+      sequenciaEvento: parseInt(sequenciaEvento || '1', 10),
+      uf: '50',
+      ambiente: String(ambiente || '2'),
+      pfxBuffer,
+      password,
+    });
+
+    if (resultSefaz.autorizado) {
+      const agora = new Date();
+      const ano = agora.getFullYear().toString();
+      const mes = (agora.getMonth() + 1).toString().padStart(2, '0');
+      const cceDir = path.join(FISCAL_STORAGE_DIR, 'xmls', empId, 'eventos', ano, mes);
+      fs.mkdirSync(cceDir, { recursive: true });
+      const xmlCCeName = `${chaveAcesso}-procEvento110110-${sequenciaEvento || 1}.xml`;
+      if (resultSefaz.xmlProcEvento) {
+        fs.writeFileSync(path.join(cceDir, xmlCCeName), resultSefaz.xmlProcEvento, 'utf8');
+      }
+
+      return res.json({
+        sucesso: true,
+        autorizado: true,
+        cStat: resultSefaz.cStat,
+        xMotivo: resultSefaz.xMotivo,
+        protocoloEvento: resultSefaz.protocoloEvento,
+        dhRegEvento: resultSefaz.dhRegEvento,
+        xmlProcEvento: resultSefaz.xmlProcEvento,
+        message: `Carta de Correção (CC-e) homologada com sucesso na SEFAZ! Protocolo: ${resultSefaz.protocoloEvento}`,
+      });
+    } else {
+      return res.status(400).json({
+        sucesso: false,
+        autorizado: false,
+        cStat: resultSefaz.cStat,
+        xMotivo: resultSefaz.xMotivo,
+        error: `SEFAZ Rejeição na CC-e [cStat ${resultSefaz.cStat}]: ${resultSefaz.xMotivo}`,
+      });
+    }
+  } catch (err) {
+    return res.status(500).json({ error: 'Falha ao processar CC-e: ' + err.message });
+  }
+});
+
+// 7.10 Transmissão de Inutilização de Numeração de NF-e (inutNFe)
+app.post('/api/fiscal/inutilizar', async (req, res) => {
+  const { ano, modelo, serie, nNFIni, nNFFin, justificativa, empresaId, ambiente } = req.body;
+  if (!nNFIni || !nNFFin || !justificativa || justificativa.length < 15) {
+    return res.status(400).json({ error: 'Faixa numérica inicial/final e justificativa (mínimo 15 caracteres) são obrigatórias.' });
+  }
+
+  const empId = empresaId || 'emp-matriz-001';
+  const certData = await getActiveCertificadoData(empId);
+  if (!certData || !certData.pfx_encrypted_base64 || !certData.password_encrypted) {
+    return res.status(400).json({ error: 'Certificado Digital A1 não encontrado no cofre para assinar a inutilização.' });
+  }
+
+  try {
+    const pfxBase64 = decryptText(certData.pfx_encrypted_base64);
+    const password = decryptText(certData.password_encrypted);
+    const pfxBuffer = Buffer.from(pfxBase64, 'base64');
+
+    const resultSefaz = await transmitirInutilizacaoSefaz({
+      ano: ano || new Date().getFullYear().toString(),
+      cnpjEmitente: certData.cnpj || '68148349000109',
+      modelo: parseInt(modelo || '55', 10),
+      serie: parseInt(serie || '1', 10),
+      nNFIni: parseInt(nNFIni, 10),
+      nNFFin: parseInt(nNFFin, 10),
+      justificativa,
+      uf: '50',
+      ambiente: String(ambiente || '2'),
+      pfxBuffer,
+      password,
+    });
+
+    if (resultSefaz.inutilizado) {
+      const agora = new Date();
+      const anoStr = agora.getFullYear().toString();
+      const inutDir = path.join(FISCAL_STORAGE_DIR, 'xmls', empId, 'inutilizadas', anoStr);
+      fs.mkdirSync(inutDir, { recursive: true });
+      const xmlInutName = `inut-${anoStr}-serie${serie || 1}-${nNFIni}-${nNFFin}-procInut.xml`;
+      if (resultSefaz.xmlProcInut) {
+        fs.writeFileSync(path.join(inutDir, xmlInutName), resultSefaz.xmlProcInut, 'utf8');
+      }
+
+      return res.json({
+        sucesso: true,
+        inutilizado: true,
+        cStat: resultSefaz.cStat,
+        xMotivo: resultSefaz.xMotivo,
+        protocolo: resultSefaz.protocolo,
+        dhRecbto: resultSefaz.dhRecbto,
+        xmlProcInut: resultSefaz.xmlProcInut,
+        message: `Inutilização homologada na SEFAZ! Protocolo: ${resultSefaz.protocolo}`,
+      });
+    } else {
+      return res.status(400).json({
+        sucesso: false,
+        inutilizado: false,
+        cStat: resultSefaz.cStat,
+        xMotivo: resultSefaz.xMotivo,
+        error: `SEFAZ Rejeição na Inutilização [cStat ${resultSefaz.cStat}]: ${resultSefaz.xMotivo}`,
+      });
+    }
+  } catch (err) {
+    return res.status(500).json({ error: 'Falha ao processar inutilização: ' + err.message });
   }
 });
 

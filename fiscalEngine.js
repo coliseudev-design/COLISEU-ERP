@@ -894,3 +894,290 @@ export async function transmitirEventoCancelamentoSefaz({
     };
   }
 }
+
+// =========================================================================
+// 9. CARTA DE CORREÇÃO ELETRÔNICA (CC-E - EVENTO 110110)
+// =========================================================================
+
+export function gerarXmlEventoCCe({
+  chaveAcesso,
+  textoCorrecao,
+  cnpjEmitente,
+  sequenciaEvento = 1,
+  dataEvento = new Date(),
+  ambiente = 2,
+}) {
+  const dhEvento = dataEvento.toISOString();
+  const cUF = chaveAcesso.slice(0, 2) || '50';
+  const cnpjClean = (cnpjEmitente || '').replace(/\D/g, '');
+  const idEvento = `ID110110${chaveAcesso}${sequenciaEvento.toString().padStart(2, '0')}`;
+  const condUso = 'A Carta de Correcao e disciplinada pelo paragrafo 1o-A do art. 7o do Convenio S/N, de 15 de dezembro de 1970 e pode ser utilizada para regularizacao de erro ocorrido na emissao de documento fiscal, desde que o erro nao esteja relacionado com: I - as variaveis que determinam o valor do imposto tais como: base de calculo, aliquota, diferenca de preco, quantidade, valor da operacao ou da prestacao; II - a correcao de dados cadastrais que implique mudanca do remetente ou do destinatario; III - a data de emissao ou de saida.';
+
+  return `<evento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00"><infEvento Id="${idEvento}"><cOrgao>${cUF}</cOrgao><tpAmb>${ambiente}</tpAmb><CNPJ>${cnpjClean}</CNPJ><chNFe>${chaveAcesso}</chNFe><dhEvento>${dhEvento}</dhEvento><tpEvento>110110</tpEvento><nSeqEvento>${sequenciaEvento}</nSeqEvento><verEvento>1.00</verEvento><detEvento versao="1.00"><descEvento>Carta de Correcao</descEvento><xCorrecao>${textoCorrecao}</xCorrecao><xCondUso>${condUso}</xCondUso></detEvento></infEvento></evento>`;
+}
+
+export async function transmitirCartaCorrecaoSefaz({
+  chaveAcesso,
+  textoCorrecao,
+  cnpjEmitente,
+  sequenciaEvento = 1,
+  uf = '50',
+  ambiente = '2',
+  pfxBuffer,
+  password,
+}) {
+  const ambKey = ambiente.toString() === '1' ? 'PRODUCAO' : 'HOMOLOGACAO';
+  const urlWS = SEFAZ_SERVIDORES.MS[ambKey]?.recepcaoEvento || SEFAZ_SERVIDORES.SVRS[ambKey]?.recepcaoEvento;
+
+  const xmlEvento = gerarXmlEventoCCe({
+    chaveAcesso,
+    textoCorrecao,
+    cnpjEmitente,
+    sequenciaEvento,
+    ambiente: parseInt(ambiente, 10),
+  });
+
+  const assinatura = assinarXmlNFe(xmlEvento, pfxBuffer, password, 'infEvento');
+  const xmlAssinado = assinatura.xmlAssinado.replace(/>\s+</g, '><').trim();
+
+  const idLote = `${Date.now()}`.slice(-15);
+  const envEvento = `<envEvento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00"><idLote>${idLote}</idLote>${xmlAssinado}</envEvento>`;
+  const soapEnvelope = `<?xml version="1.0" encoding="utf-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4">${envEvento}</nfeDadosMsg></soap12:Body></soap12:Envelope>`;
+
+  try {
+    const httpsAgent = new https.Agent({
+      pfx: pfxBuffer,
+      passphrase: password,
+      rejectUnauthorized: false,
+    });
+
+    const parsedUrl = new URL(urlWS);
+    const options = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || 443,
+      path: parsedUrl.pathname + parsedUrl.search,
+      method: 'POST',
+      agent: httpsAgent,
+      headers: {
+        'Content-Type': 'application/soap+xml; charset=utf-8; action="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4/nfeRecepcaoEvento"',
+        'Content-Length': Buffer.byteLength(soapEnvelope, 'utf8'),
+      },
+    };
+
+    return new Promise((resolve) => {
+      const req = https.request(options, (res) => {
+        let responseData = '';
+        res.on('data', (chunk) => {
+          responseData += chunk;
+        });
+        res.on('end', () => {
+          const cStatMatch = responseData.match(/<cStat>(\d+)<\/cStat>/g);
+          const xMotivoMatch = responseData.match(/<xMotivo>([^<]+)<\/xMotivo>/g);
+          const nProtMatch = responseData.match(/<nProt>([^<]+)<\/nProt>/);
+          const dhRegEventoMatch = responseData.match(/<dhRegEvento>([^<]+)<\/dhRegEvento>/);
+          const retEventoMatch = responseData.match(/<retEvento[\s\S]*?<\/retEvento>/);
+
+          let cStat = '0';
+          let xMotivo = 'Retorno da SEFAZ';
+          if (cStatMatch && cStatMatch.length > 0) {
+            cStat = cStatMatch[cStatMatch.length - 1].replace(/<\/?cStat>/g, '');
+          }
+          if (xMotivoMatch && xMotivoMatch.length > 0) {
+            xMotivo = xMotivoMatch[xMotivoMatch.length - 1].replace(/<\/?xMotivo>/g, '');
+          }
+
+          const protocoloEvento = nProtMatch ? nProtMatch[1] : null;
+          const isAutorizado = cStat === '135' || cStat === '136';
+
+          let xmlProcEvento = '';
+          if (retEventoMatch) {
+            xmlProcEvento = `<?xml version="1.0" encoding="UTF-8"?><procEventoNFe versao="1.00" xmlns="http://www.portalfiscal.inf.br/nfe">${xmlAssinado}${retEventoMatch[0]}</procEventoNFe>`;
+          }
+
+          resolve({
+            success: isAutorizado,
+            autorizado: isAutorizado,
+            cStat,
+            xMotivo,
+            protocoloEvento,
+            dhRegEvento: dhRegEventoMatch ? dhRegEventoMatch[1] : new Date().toISOString(),
+            xmlProcEvento,
+            rawResponse: responseData,
+          });
+        });
+      });
+
+      req.on('error', (err) => {
+        resolve({
+          success: false,
+          autorizado: false,
+          error: `Erro ao comunicar com RecepcaoEvento SEFAZ: ${err.message}`,
+        });
+      });
+
+      req.setTimeout(20000, () => {
+        req.destroy();
+        resolve({
+          success: false,
+          autorizado: false,
+          error: 'Tempo limite (Timeout 20s) na recepção de CC-e da SEFAZ.',
+        });
+      });
+
+      req.write(soapEnvelope);
+      req.end();
+    });
+  } catch (err) {
+    return {
+      success: false,
+      autorizado: false,
+      error: `Falha na transmissão da CC-e: ${err.message}`,
+    };
+  }
+}
+
+// =========================================================================
+// 10. INUTILIZAÇÃO DE NUMERAÇÃO DE NF-E (INUTNFE 4.00)
+// =========================================================================
+
+export function gerarXmlInutilizacao({
+  ano,
+  cnpjEmitente,
+  modelo = 55,
+  serie = 1,
+  nNFIni,
+  nNFFin,
+  justificativa,
+  uf = '50',
+  ambiente = 2,
+}) {
+  const cUF = uf.replace(/\D/g, '') || '50';
+  const cnpjClean = (cnpjEmitente || '').replace(/\D/g, '');
+  const anoStr = (ano || new Date().getFullYear().toString()).slice(-2);
+  const modStr = modelo.toString().padStart(2, '0');
+  const serieStr = serie.toString().padStart(3, '0');
+  const iniStr = nNFIni.toString().padStart(9, '0');
+  const finStr = nNFFin.toString().padStart(9, '0');
+  const idInut = `ID${cUF}${anoStr}${cnpjClean}${modStr}${serieStr}${iniStr}${finStr}`;
+
+  return `<inutNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00"><infInut Id="${idInut}"><tpAmb>${ambiente}</tpAmb><xServ>INUTILIZAR</xServ><cUF>${cUF}</cUF><ano>${anoStr}</ano><CNPJ>${cnpjClean}</CNPJ><mod>${modStr}</mod><serie>${serie}</serie><nNFIni>${nNFIni}</nNFIni><nNFFin>${nNFFin}</nNFFin><xJust>${justificativa}</xJust></infInut></inutNFe>`;
+}
+
+export async function transmitirInutilizacaoSefaz({
+  ano,
+  cnpjEmitente,
+  modelo = 55,
+  serie = 1,
+  nNFIni,
+  nNFFin,
+  justificativa,
+  uf = '50',
+  ambiente = '2',
+  pfxBuffer,
+  password,
+}) {
+  const ambKey = ambiente.toString() === '1' ? 'PRODUCAO' : 'HOMOLOGACAO';
+  const urlWS = SEFAZ_SERVIDORES.MS[ambKey]?.inutilizacao || SEFAZ_SERVIDORES.SVRS[ambKey]?.inutilizacao;
+
+  const xmlInut = gerarXmlInutilizacao({
+    ano,
+    cnpjEmitente,
+    modelo,
+    serie,
+    nNFIni,
+    nNFFin,
+    justificativa,
+    uf,
+    ambiente: parseInt(ambiente, 10),
+  });
+
+  const assinatura = assinarXmlNFe(xmlInut, pfxBuffer, password, 'infInut');
+  const xmlAssinado = assinatura.xmlAssinado.replace(/>\s+</g, '><').trim();
+
+  const soapEnvelope = `<?xml version="1.0" encoding="utf-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeInutilizacao4">${xmlAssinado}</nfeDadosMsg></soap12:Body></soap12:Envelope>`;
+
+  try {
+    const httpsAgent = new https.Agent({
+      pfx: pfxBuffer,
+      passphrase: password,
+      rejectUnauthorized: false,
+    });
+
+    const parsedUrl = new URL(urlWS);
+    const options = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || 443,
+      path: parsedUrl.pathname + parsedUrl.search,
+      method: 'POST',
+      agent: httpsAgent,
+      headers: {
+        'Content-Type': 'application/soap+xml; charset=utf-8; action="http://www.portalfiscal.inf.br/nfe/wsdl/NFeInutilizacao4/nfeInutilizacaoNF"',
+        'Content-Length': Buffer.byteLength(soapEnvelope, 'utf8'),
+      },
+    };
+
+    return new Promise((resolve) => {
+      const req = https.request(options, (res) => {
+        let responseData = '';
+        res.on('data', (chunk) => {
+          responseData += chunk;
+        });
+        res.on('end', () => {
+          const cStatMatch = responseData.match(/<cStat>(\d+)<\/cStat>/);
+          const xMotivoMatch = responseData.match(/<xMotivo>([^<]+)<\/xMotivo>/);
+          const nProtMatch = responseData.match(/<nProt>([^<]+)<\/nProt>/);
+          const dhRecbtoMatch = responseData.match(/<dhRecbto>([^<]+)<\/dhRecbto>/);
+          const retInutMatch = responseData.match(/<retInutNFe[\s\S]*?<\/retInutNFe>/);
+
+          const cStat = cStatMatch ? cStatMatch[1] : '0';
+          const xMotivo = xMotivoMatch ? xMotivoMatch[1] : 'Retorno da SEFAZ';
+          const protocolo = nProtMatch ? nProtMatch[1] : null;
+          const isInutilizado = cStat === '102';
+
+          let xmlProcInut = '';
+          if (retInutMatch) {
+            xmlProcInut = `<?xml version="1.0" encoding="UTF-8"?><procInutNFe versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe">${xmlAssinado}${retInutMatch[0]}</procInutNFe>`;
+          }
+
+          resolve({
+            success: isInutilizado,
+            inutilizado: isInutilizado,
+            cStat,
+            xMotivo,
+            protocolo,
+            dhRecbto: dhRecbtoMatch ? dhRecbtoMatch[1] : new Date().toISOString(),
+            xmlProcInut,
+            rawResponse: responseData,
+          });
+        });
+      });
+
+      req.on('error', (err) => {
+        resolve({
+          success: false,
+          inutilizado: false,
+          error: `Erro ao comunicar com Inutilizacao SEFAZ: ${err.message}`,
+        });
+      });
+
+      req.setTimeout(20000, () => {
+        req.destroy();
+        resolve({
+          success: false,
+          inutilizado: false,
+          error: 'Tempo limite (Timeout 20s) na inutilização da SEFAZ.',
+        });
+      });
+
+      req.write(soapEnvelope);
+      req.end();
+    });
+  } catch (err) {
+    return {
+      success: false,
+      inutilizado: false,
+      error: `Falha na transmissão da inutilização: ${err.message}`,
+    };
+  }
+}
+
