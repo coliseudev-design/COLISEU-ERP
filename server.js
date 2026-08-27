@@ -17,6 +17,7 @@ import {
   assinarXmlNFe,
   consultarStatusServicoSefaz,
   transmitirLoteNFeSefaz,
+  transmitirEventoCancelamentoSefaz,
 } from './fiscalEngine.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -2026,6 +2027,142 @@ app.get('/api/fiscal/exportar-mes', async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ error: 'Erro ao exportar lote mensal: ' + err.message });
+  }
+});
+
+// 7.7 Transmissão do Evento 110111 de Cancelamento SEFAZ (Web / Nuvem)
+app.post('/api/fiscal/cancelar', async (req, res) => {
+  const { chaveAcesso, justificativa, protocoloAutorizacao, empresaId, ambiente } = req.body;
+  if (!chaveAcesso || !justificativa || justificativa.length < 15) {
+    return res.status(400).json({ error: 'Chave de acesso e justificativa (mínimo 15 caracteres) são obrigatórias.' });
+  }
+
+  const empId = empresaId || 'emp-matriz-001';
+  const certData = await getActiveCertificadoData(empId);
+  if (!certData || !certData.pfx_encrypted_base64 || !certData.password_encrypted) {
+    return res.status(400).json({ error: 'Certificado Digital A1 não encontrado no cofre para assinar o cancelamento.' });
+  }
+
+  try {
+    const pfxBase64 = decryptText(certData.pfx_encrypted_base64);
+    const password = decryptText(certData.password_encrypted);
+    const pfxBuffer = Buffer.from(pfxBase64, 'base64');
+
+    const resultSefaz = await transmitirEventoCancelamentoSefaz({
+      chaveAcesso,
+      protocoloAutorizacao: protocoloAutorizacao || '150260000000000',
+      justificativa,
+      cnpjEmitente: certData.cnpj || '68148349000109',
+      uf: '50',
+      ambiente: String(ambiente || '2'),
+      pfxBuffer,
+      password,
+    });
+
+    if (resultSefaz.cancelado) {
+      // Gravar XML oficial do evento de cancelamento (procEventoNFe)
+      const agora = new Date();
+      const ano = agora.getFullYear().toString();
+      const mes = (agora.getMonth() + 1).toString().padStart(2, '0');
+      const eventoDir = path.join(FISCAL_STORAGE_DIR, 'xmls', empId, 'eventos', ano, mes);
+      fs.mkdirSync(eventoDir, { recursive: true });
+      const xmlEventoName = `${chaveAcesso}-procEvento110111.xml`;
+      if (resultSefaz.xmlProcEvento) {
+        fs.writeFileSync(path.join(eventoDir, xmlEventoName), resultSefaz.xmlProcEvento, 'utf8');
+      }
+
+      // Atualizar status do documento fiscal para CANCELADO
+      try {
+        await pool.query(
+          `UPDATE documentos_fiscais
+           SET status = 'CANCELADO',
+               motivo_status = $1,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE chave_acesso = $2`,
+          [`135 - Cancelamento homologado (Protocolo: ${resultSefaz.protocoloEvento})`, chaveAcesso]
+        );
+      } catch (dbErr) {
+        console.warn('[Fiscal] Aviso ao atualizar status de cancelamento no DB:', dbErr.message);
+      }
+
+      // Atualizar pedidos vinculados em memória
+      inMemoryPedidos = inMemoryPedidos.map((ped) => {
+        if (ped.chaveNFeEmitida === chaveAcesso || ped.chaveNFeAcobertamento === chaveAcesso) {
+          return {
+            ...ped,
+            status: 'CANCELADO',
+            statusFiscalNfe: 'CANCELADA',
+            observacoesGerais: `${ped.observacoesGerais || ''} [NF-e Cancelada na SEFAZ: Protocolo ${resultSefaz.protocoloEvento}]`.trim(),
+          };
+        }
+        return ped;
+      });
+
+      broadcastMutation({
+        entity: 'pedidos_venda',
+        action: 'UPSERT',
+        id: chaveAcesso,
+        payload: {
+          chaveNFeEmitida: chaveAcesso,
+          status: 'CANCELADO',
+          statusFiscalNfe: 'CANCELADA',
+          protocoloCancelamento: resultSefaz.protocoloEvento,
+        },
+      });
+
+      return res.json({
+        sucesso: true,
+        cancelado: true,
+        cStat: resultSefaz.cStat,
+        xMotivo: resultSefaz.xMotivo,
+        protocoloEvento: resultSefaz.protocoloEvento,
+        dhRegEvento: resultSefaz.dhRegEvento,
+        xmlProcEvento: resultSefaz.xmlProcEvento,
+        message: `Cancelamento homologado na SEFAZ! Protocolo: ${resultSefaz.protocoloEvento}`,
+      });
+    } else {
+      return res.status(400).json({
+        sucesso: false,
+        cancelado: false,
+        cStat: resultSefaz.cStat,
+        xMotivo: resultSefaz.xMotivo,
+        error: `SEFAZ Rejeição no Cancelamento [cStat ${resultSefaz.cStat}]: ${resultSefaz.xMotivo}`,
+      });
+    }
+  } catch (err) {
+    return res.status(500).json({ error: 'Falha ao processar cancelamento: ' + err.message });
+  }
+});
+
+// 7.8 Download do XML Oficial de Evento de Cancelamento (procEventoNFe)
+app.get('/api/fiscal/xml-cancelamento/:chave', async (req, res) => {
+  const { chave } = req.params;
+  const empId = req.query.empresaId || 'emp-matriz-001';
+
+  try {
+    const eventosBase = path.join(FISCAL_STORAGE_DIR, 'xmls', empId, 'eventos');
+    if (fs.existsSync(eventosBase)) {
+      const anos = fs.readdirSync(eventosBase);
+      for (const a of anos) {
+        const anoP = path.join(eventosBase, a);
+        if (fs.statSync(anoP).isDirectory()) {
+          const meses = fs.readdirSync(anoP);
+          for (const m of meses) {
+            const xmlFile = path.join(anoP, m, `${chave}-procEvento110111.xml`);
+            if (fs.existsSync(xmlFile)) {
+              const xmlContent = fs.readFileSync(xmlFile, 'utf8');
+              res.setHeader('Content-Type', 'application/xml');
+              res.setHeader('Content-Disposition', `attachment; filename="${chave}-procEvento110111.xml"`);
+              return res.send(xmlContent);
+            }
+          }
+        }
+      }
+    }
+
+    return res.status(404).json({ error: 'XML oficial de evento de cancelamento não localizado.' });
+  } catch (err) {
+    return res.status(500).json({ error: 'Erro ao buscar XML de cancelamento: ' + err.message });
   }
 });
 

@@ -318,83 +318,65 @@ export const GerenciamentoNFePage: React.FC = () => {
       }
     };
 
-    if (config.modoOperacao === 'TECNOSPEED') {
-      try {
-        const res = await invoke<string>('tecnospeed_cancelar_nfe_cmd', {
-          chave: chaveCanc,
+    // Se estiver no Desktop (Tauri)
+    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+      if (config.modoOperacao === 'TECNOSPEED') {
+        try {
+          const res = await invoke<string>('tecnospeed_cancelar_nfe_cmd', {
+            chave: chaveCanc,
+            justificativa: justificativaCanc,
+            protocolo: '150260001829384',
+            cnpj: config.cnpjEmitente,
+            uf: obterSiglaUf(config.ufWebService),
+            ambiente: config.ambienteDestino === 'PRODUÇÃO' ? 1 : 2,
+            certName: config.certificadoDigital || '',
+          });
+          logRetorno(`✅ Cancelamento homologado via TecnoSpeed: ${res}`);
+          desvincularPedidosAposCancelamento(chaveCanc, justificativaCanc);
+          showToast('NF-e cancelada e pedido destravado com sucesso!');
+          setIsModalCancelarOpen(false);
+          setChaveCanc('');
+          setJustificativaCanc('');
+        } catch (e: any) {
+          logRetorno(`❌ Falha no cancelamento TecnoSpeed: ${String(e)}`);
+          showToast(`Erro TecnoSpeed: ${String(e)}`);
+        }
+        return;
+      }
+    }
+
+    // Modo Web / Nuvem VPS (mTLS Direto SEFAZ Evento 110111)
+    try {
+      logRetorno(`Enviando Evento 110111 de Cancelamento para SEFAZ MS (SVRS)... Chave: ${chaveCanc}`);
+      const res = await fetch('/api/fiscal/cancelar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chaveAcesso: chaveCanc,
           justificativa: justificativaCanc,
-          protocolo: '150260001829384',
-          cnpj: config.cnpjEmitente,
-          uf: obterSiglaUf(config.ufWebService),
+          empresaId: 'emp-matriz-001',
           ambiente: config.ambienteDestino === 'PRODUÇÃO' ? 1 : 2,
-          certName: config.certificadoDigital || '',
-        });
-        logRetorno(`✅ Cancelamento homologado via TecnoSpeed: ${res}`);
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && (data.cancelado || data.sucesso)) {
+        logRetorno(
+          `✅ Cancelamento HOMOLOGADO na SEFAZ! Protocolo: ${data.protocoloEvento} | Status: cStat ${data.cStat} - ${data.xMotivo}`
+        );
         desvincularPedidosAposCancelamento(chaveCanc, justificativaCanc);
-        showToast('NF-e cancelada e pedido destravado com sucesso!');
+        showToast(`NF-e Cancelada com sucesso! Protocolo: ${data.protocoloEvento}`);
         setIsModalCancelarOpen(false);
         setChaveCanc('');
         setJustificativaCanc('');
-      } catch (e: any) {
-        logRetorno(`❌ Falha no cancelamento TecnoSpeed: ${String(e)}`);
-        showToast(`Erro TecnoSpeed: ${String(e)}`);
+      } else {
+        logRetorno(`❌ Rejeição SEFAZ no Cancelamento: ${data.error || data.xMotivo || 'Falha ao cancelar'}`);
+        alert(data.error || `Rejeição SEFAZ [cStat ${data.cStat}]: ${data.xMotivo}`);
       }
-      return;
+    } catch (netErr: any) {
+      logRetorno(`❌ Erro de rede ao transmitir cancelamento: ${netErr.message}`);
+      alert(`Falha na comunicação de cancelamento: ${netErr.message}`);
     }
-
-    if (config.modoOperacao === 'NUVEM_FISCAL') {
-      try {
-        const res = await invoke<string>('nuvemfiscal_cancelar_nfe_cmd', {
-          clientId: config.nuvemFiscalClientId,
-          clientSecret: config.nuvemFiscalClientSecret,
-          idNfe: chaveCanc,
-          justificativa: justificativaCanc,
-          sandbox: config.nuvemFiscalAmbiente === 'SANDBOX',
-        });
-        logRetorno(`✅ Cancelamento homologado via Nuvem Fiscal: ${res}`);
-        desvincularPedidosAposCancelamento(chaveCanc, justificativaCanc);
-        showToast('NF-e cancelada e pedido destravado com sucesso!');
-        setIsModalCancelarOpen(false);
-        setChaveCanc('');
-        setJustificativaCanc('');
-      } catch (e: any) {
-        logRetorno(`❌ Falha no cancelamento Nuvem Fiscal: ${String(e)}`);
-        showToast(`Erro Nuvem Fiscal: ${String(e)}`);
-      }
-      return;
-    }
-
-    if (config.modoOperacao === 'ACBR') {
-      try {
-        const res = await invoke<string>('acbr_cancelar_nfe_cmd', {
-          chave: chaveCanc,
-          justificativa: justificativaCanc,
-          cnpj: config.cnpjEmitente,
-          host: config.hostAcbr || '127.0.0.1',
-          port: Number(config.portaAcbr) || 3434,
-        });
-        logRetorno(`✅ Cancelamento homologado via ACBr: ${res}`);
-        desvincularPedidosAposCancelamento(chaveCanc, justificativaCanc);
-        showToast('NF-e cancelada e pedido destravado com sucesso!');
-        setIsModalCancelarOpen(false);
-        setChaveCanc('');
-        setJustificativaCanc('');
-      } catch (e: any) {
-        logRetorno(`❌ Falha no cancelamento ACBr: ${String(e)}`);
-        showToast(`Erro ACBr: ${String(e)}`);
-      }
-      return;
-    }
-
-    const protocolo = `15026000${Math.floor(1000000 + Math.random() * 9000000)}`;
-    logRetorno(
-      `✅ Cancelamento Homologado na SEFAZ: Chave=${chaveCanc}, Protocolo=${protocolo}, Evento=110111 (cStat 135 - Evento registrado e vinculado a NF-e).`
-    );
-    desvincularPedidosAposCancelamento(chaveCanc, justificativaCanc);
-    showToast('NF-e cancelada e pedido destravado com sucesso!');
-    setIsModalCancelarOpen(false);
-    setChaveCanc('');
-    setJustificativaCanc('');
   };
 
   const handleExecutarCce = async () => {
