@@ -75,6 +75,8 @@ export function gerarXmlNFe(pedido: PedidoVendaItem, chave: string, protocolo: s
   const vFrete = (pedido.valorFrete || 0).toFixed(2);
   const vDesc = (pedido.totalDescontoGlobal || 0).toFixed(2);
 
+  const ambNum = config.ambienteDestino === 'PRODUÇÃO' ? '1' : '2';
+
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
   <NFe xmlns="http://www.portalfiscal.inf.br/nfe">
@@ -93,7 +95,7 @@ export function gerarXmlNFe(pedido: PedidoVendaItem, chave: string, protocolo: s
         <tpImp>1</tpImp>
         <tpEmis>1</tpEmis>
         <cDV>${chave.substring(43)}</cDV>
-        <tpAmb>1</tpAmb>
+        <tpAmb>${ambNum}</tpAmb>
         <finNFe>1</finNFe>
         <indFinal>1</indFinal>
         <indPres>1</indPres>
@@ -180,7 +182,7 @@ export function gerarXmlNFe(pedido: PedidoVendaItem, chave: string, protocolo: s
   </NFe>
   <protNFe versao="4.00">
     <infProt>
-      <tpAmb>1</tpAmb>
+      <tpAmb>${ambNum}</tpAmb>
       <verAplic>MS_4.00_v1.2</verAplic>
       <chNFe>${chave}</chNFe>
       <dhRecbto>${dhEmi}</dhRecbto>
