@@ -4,13 +4,20 @@ import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { AIInsight } from '../components/ui/AIComponents';
-import { Save, Building2, ShieldCheck, Printer, Key, Mail, CheckCircle2, Sliders, DollarSign, FileText, Receipt, Truck } from 'lucide-react';
+import { Save, Building2, ShieldCheck, Printer, Key, Mail, CheckCircle2, Sliders, DollarSign, FileText, Receipt, Truck, RefreshCw, Cpu, Database, Server, ExternalLink, Activity } from 'lucide-react';
 import { getNfeConfig, salvarNfeConfig } from '../lib/nfeConfig';
 import { getNfceConfig, salvarNfceConfig } from '../lib/nfceConfig';
+import { configuracoesService } from '../lib/configuracoes';
 
 export const ConfiguracoesPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'empresa' | 'fiscal' | 'impressora' | 'preferencias' | 'financeiro'>('empresa');
+  const [activeTab, setActiveTab] = useState<'empresa' | 'fiscal' | 'integracao' | 'impressora' | 'preferencias' | 'financeiro'>('empresa');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Modo de Operação & Worker State
+  const [modoOperacao, setModoOperacao] = useState<'standalone' | 'firebird_worker'>('standalone');
+  const [workerStatus, setWorkerStatus] = useState<any[]>([]);
+  const [isSyncingWorker, setIsSyncingWorker] = useState(false);
+  const [isSavingModo, setIsSavingModo] = useState(false);
 
   // Form States
   const [razaoSocial, setRazaoSocial] = useState('PIVETA DISTRIBUIDORA DE TINTAS AUTOMOTIVAS LTDA');
@@ -35,6 +42,14 @@ export const ConfiguracoesPage: React.FC = () => {
     setProximoNFe(String(nfeCfg.proximoNumeroNfe || 1025));
     setSerieNFCe(String(nfceCfg.serieNfce || 1));
     setProximoNFCe(String(nfceCfg.proximoNumeroNfce || 120));
+
+    // Carregar Modo de Operação & Status do Worker
+    configuracoesService.getModoOperacao().then(res => {
+      if (res?.modo_operacao) setModoOperacao(res.modo_operacao);
+    });
+    configuracoesService.getWorkerSyncStatus().then(res => {
+      if (res?.status) setWorkerStatus(res.status);
+    });
   }, []);
 
   // Impressora
@@ -136,7 +151,7 @@ export const ConfiguracoesPage: React.FC = () => {
       {/* Abas de Configuração */}
       <div className="coliseu-card" style={{ padding: '4px 8px' }}>
         <div className="coliseu-tabs" role="tablist">
-          {(['empresa', 'fiscal', 'financeiro', 'impressora', 'preferencias'] as const).map((tab) => (
+          {(['empresa', 'fiscal', 'integracao', 'financeiro', 'impressora', 'preferencias'] as const).map((tab) => (
             <button
               key={tab}
               role="tab"
@@ -153,6 +168,11 @@ export const ConfiguracoesPage: React.FC = () => {
                 <>
                   <ShieldCheck size={14} aria-hidden="true" />
                   <span>Séries & Numeração Fiscal</span>
+                </>
+              ) : tab === 'integracao' ? (
+                <>
+                  <Server size={14} aria-hidden="true" />
+                  <span>Integração Firebird & Worker</span>
                 </>
               ) : tab === 'financeiro' ? (
                 <>
@@ -340,6 +360,195 @@ export const ConfiguracoesPage: React.FC = () => {
             lineHeight: 1.5
           }}>
             ℹ️ <strong>Regra de Unicidade Fiscal:</strong> Cada pedido de venda aceita apenas 1 nota fiscal autorizada. Em caso de cancelamento da nota na SEFAZ, o pedido é liberado para novo faturamento. Se o pedido já possui NFC-e emitida, o sistema permite gerar a NF-e de Acobertamento de Cupom Fiscal (CFOP 5.929 / 6.929).
+          </div>
+        </div>
+      )}
+
+      {/* ABA: INTEGRAÇÃO FIREBIRD & WORKER */}
+      {activeTab === 'integracao' && (
+        <div className="coliseu-card" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div>
+            <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '8px', margin: 0, marginBottom: '14px' }}>
+              Modalidade de Operação & Conexão Firebird
+            </h3>
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: 0, marginBottom: '16px' }}>
+              Selecione se o Coliseu ERP deve operar de forma 100% autônoma na nuvem ou interligado através do <strong>Worker C#</strong> para coletar dados do banco <strong>Firebird (COLISEU.FDB / PIVETA.FDB)</strong>, alimentar o Business Intelligence e emitir MDF-e.
+            </p>
+
+            {/* SELETORES DE MODO EM CARDS */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+              {/* CARD 1: NUVEM AUTÔNOMA */}
+              <div 
+                onClick={async () => {
+                  setIsSavingModo(true);
+                  await configuracoesService.setModoOperacao('standalone');
+                  setModoOperacao('standalone');
+                  setIsSavingModo(false);
+                  showToast('Modo de operação alterado para: Nuvem Autônoma (Banco Próprio)');
+                }}
+                style={{
+                  border: `2px solid ${modoOperacao === 'standalone' ? 'var(--action-primary)' : 'var(--border-subtle)'}`,
+                  borderRadius: '12px',
+                  padding: '18px',
+                  backgroundColor: modoOperacao === 'standalone' ? 'rgba(59, 130, 246, 0.05)' : 'var(--surface-2)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  position: 'relative'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ padding: '8px', borderRadius: '8px', backgroundColor: 'rgba(59, 130, 246, 0.15)', color: 'var(--action-primary)' }}>
+                      <Database size={20} />
+                    </div>
+                    <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>1. Nuvem Autônoma</span>
+                  </div>
+                  {modoOperacao === 'standalone' && (
+                    <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 8px', borderRadius: '20px', backgroundColor: 'var(--action-primary)', color: '#fff' }}>
+                      ATIVO
+                    </span>
+                  )}
+                </div>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
+                  Utiliza o banco de dados nativo do sistema (SQLite / PostgreSQL Nuvem). Vendas, estoque, financeiro e notas fiscais são cadastrados e geridos diretamente nesta plataforma.
+                </p>
+              </div>
+
+              {/* CARD 2: HÍBRIDO FIREBIRD */}
+              <div 
+                onClick={async () => {
+                  setIsSavingModo(true);
+                  await configuracoesService.setModoOperacao('firebird_worker');
+                  setModoOperacao('firebird_worker');
+                  setIsSavingModo(false);
+                  showToast('Modo de operação alterado para: Híbrido Integrado Firebird (Worker)');
+                }}
+                style={{
+                  border: `2px solid ${modoOperacao === 'firebird_worker' ? '#10b981' : 'var(--border-subtle)'}`,
+                  borderRadius: '12px',
+                  padding: '18px',
+                  backgroundColor: modoOperacao === 'firebird_worker' ? 'rgba(16, 185, 129, 0.06)' : 'var(--surface-2)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  position: 'relative'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ padding: '8px', borderRadius: '8px', backgroundColor: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
+                      <Cpu size={20} />
+                    </div>
+                    <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>2. Híbrido Integrado Firebird</span>
+                  </div>
+                  {modoOperacao === 'firebird_worker' && (
+                    <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 8px', borderRadius: '20px', backgroundColor: '#10b981', color: '#fff' }}>
+                      ATIVO
+                    </span>
+                  )}
+                </div>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
+                  Conecta com o <strong>Coliseu Desktop (Firebird)</strong> via Worker C# (.NET). Alimenta os <strong>13 Dashboards de BI</strong> em tempo real e permite <strong>emitir MDF-e selecionando as NF-es faturadas no Firebird</strong>.
+                </p>
+              </div>
+            </div>
+
+            {/* PAINEL DE DIAGNÓSTICO DO WORKER */}
+            <div style={{
+              border: '1px solid var(--border-subtle)',
+              borderRadius: '10px',
+              padding: '16px',
+              backgroundColor: 'var(--surface-1)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Activity size={18} style={{ color: modoOperacao === 'firebird_worker' ? '#10b981' : 'var(--text-muted)' }} />
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>Status do Serviço Windows (ColiseuSpeed.Worker)</span>
+                </div>
+                <button 
+                  type="button"
+                  disabled={isSyncingWorker}
+                  onClick={async () => {
+                    setIsSyncingWorker(true);
+                    await configuracoesService.forcarSyncWorker();
+                    const st = await configuracoesService.getWorkerSyncStatus();
+                    if (st?.status) setWorkerStatus(st.status);
+                    setIsSyncingWorker(false);
+                    showToast('Sincronização com o Worker solicitada com sucesso!');
+                  }}
+                  className="coliseu-btn coliseu-btn-secondary"
+                  style={{ fontSize: '11px', padding: '4px 10px', height: '30px' }}
+                >
+                  <RefreshCw size={12} className={isSyncingWorker ? 'animate-spin' : ''} />
+                  {isSyncingWorker ? 'Sincronizando...' : 'Atualizar / Forçar Sync'}
+                </button>
+              </div>
+
+              {/* TABELA DE METADADOS DE SINCRONIZAÇÃO */}
+              <div style={{ overflowX: 'auto', marginBottom: '14px' }}>
+                <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', textAlign: 'left' }}>
+                      <th style={{ padding: '6px 8px' }}>Tabela / Entidade</th>
+                      <th style={{ padding: '6px 8px' }}>Última Sincronização</th>
+                      <th style={{ padding: '6px 8px' }}>Registros Processados</th>
+                      <th style={{ padding: '6px 8px' }}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {workerStatus.length > 0 ? (
+                      workerStatus.map((row: any, i: number) => (
+                        <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                          <td style={{ padding: '6px 8px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                            {row.tabela === '__heartbeat__' ? '📡 Heartbeat Conexão Firebird (3050)' : row.tabela}
+                          </td>
+                          <td style={{ padding: '6px 8px', color: 'var(--text-secondary)' }}>
+                            {row.ultima ? new Date(row.ultima).toLocaleString() : 'Pendente'}
+                          </td>
+                          <td style={{ padding: '6px 8px', color: 'var(--text-primary)' }}>
+                            {row.registros || row.total_registros || 0}
+                          </td>
+                          <td style={{ padding: '6px 8px' }}>
+                            <span style={{
+                              fontSize: '10px',
+                              fontWeight: 700,
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              backgroundColor: row.status === 'OK' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                              color: row.status === 'OK' ? '#10b981' : '#ef4444'
+                            }}>
+                              {row.status === 'OK' ? 'CONECTADO / OK' : (row.status || 'OFFLINE')}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} style={{ padding: '12px 8px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                          Nenhum registro de sincronização recebido ainda. Inicie o serviço <strong>ColiseuSpeed.Worker</strong> no servidor local.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* INSTRUÇÕES DO APPSPEC */}
+              <div style={{
+                backgroundColor: 'var(--surface-2)',
+                borderRadius: '6px',
+                padding: '12px',
+                fontSize: '11px',
+                color: 'var(--text-secondary)',
+                lineHeight: 1.6
+              }}>
+                <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                  ⚙️ Configuração do Serviço Windows (appsettings.json):
+                </div>
+                <div>• Caminho do Banco no Servidor: <code style={{ backgroundColor: 'var(--surface-1)', padding: '2px 4px', borderRadius: '3px' }}>C:\Coliseu\Data\PIVETA.FDB</code></div>
+                <div>• Porta Firebird: <code style={{ backgroundColor: 'var(--surface-1)', padding: '2px 4px', borderRadius: '3px' }}>3050</code> | Usuário: <code style={{ backgroundColor: 'var(--surface-1)', padding: '2px 4px', borderRadius: '3px' }}>SYSDBA</code></div>
+                <div>• URL do Servidor Cloud: <code style={{ backgroundColor: 'var(--surface-1)', padding: '2px 4px', borderRadius: '3px' }}>https://coliseu-erp.seu-dominio.com/api/sync</code></div>
+              </div>
+            </div>
           </div>
         </div>
       )}

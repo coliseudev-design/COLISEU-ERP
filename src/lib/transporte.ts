@@ -749,18 +749,6 @@ export const transporteService = {
     };
   },
 
-  async listarNfesDisponiveisTransporte(): Promise<NfeDocumentoItem[]> {
-    if (isTauri()) {
-      try {
-        const docs = await invoke<NfeDocumentoItem[]>('listar_nfes_disponiveis_transporte_cmd');
-        if (Array.isArray(docs)) return docs;
-      } catch (e) {
-        console.error('Erro ao listar NFes do backend para transporte:', e);
-      }
-    }
-    return [];
-  },
-
   // --- ANALYTICS & KPIS EXECUTIVOS ---
   async calcularKpis(filialId: string = 'todas', periodo: string = 'mes'): Promise<TransporteKPIs> {
     if (isTauri()) {
@@ -822,6 +810,49 @@ export const transporteService = {
     return [
       { rota_nome: 'DOURADOS ➔ CAMPO GRANDE', uf_origem: 'MS', uf_destino: 'MS', total_viagens: 1, faturamento_frete: 1246.0, percentual: 100, color: 'var(--action-primary)' },
     ];
+  },
+
+  async listarNfesDisponiveisTransporte(filtros?: { cidade?: string; data_inicio?: string; data_fim?: string }): Promise<NfeDocumentoItem[]> {
+    try {
+      // 1. Tentar buscar da API de NF-es do Firebird / Sync
+      const params = new URLSearchParams();
+      if (filtros?.cidade) params.append('cidade', filtros.cidade);
+      if (filtros?.data_inicio) params.append('data_inicio', filtros.data_inicio);
+      if (filtros?.data_fim) params.append('data_fim', filtros.data_fim);
+
+      const res = await fetch(`/api/sync/nfes-emitidas?${params.toString()}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+          return json.data.map((item: any) => ({
+            id: item.id || `FB-${item.numero}`,
+            modelo: '55_NFE',
+            numero: item.numero,
+            serie: item.serie || 1,
+            chave_acesso: item.chave_acesso,
+            data_emissao: item.data_emissao,
+            destinatario_nome: item.destinatario_nome,
+            destinatario_cpf_cnpj: item.destinatario_documento || '',
+            destinatario_cidade: item.destinatario_cidade,
+            destinatario_uf: item.destinatario_uf,
+            valor_total: item.valor_total,
+            status: 'AUTORIZADA',
+            tipo_origem: 'FIREBIRD_WORKER',
+          }));
+        }
+      }
+    } catch {
+      // fallback
+    }
+
+    if (isTauri()) {
+      try {
+        return await invoke<NfeDocumentoItem[]>('listar_nfes_disponiveis_transporte_cmd', {});
+      } catch (e) {
+        console.error('Erro ao listar NF-es nativas no backend:', e);
+      }
+    }
+    return MOCK_DOCUMENTOS_FISCAIS_TRANSPORTE;
   },
 };
 

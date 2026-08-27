@@ -2311,6 +2311,7 @@ try {
   const usuariosRouter = require('./src-server/routes/usuarios');
   const gruposRouter = require('./src-server/routes/grupos');
   const configuracoesRouter = require('./src-server/routes/configuracoes');
+  const syncRouter = require('./src-server/routes/sync');
   const { router: filiaisRouter } = require('./src-server/routes/filiais');
 
   const biContextMiddleware = (req, res, next) => {
@@ -2324,6 +2325,8 @@ try {
   };
 
   app.use('/api/bi', biContextMiddleware, biRouter);
+  app.use('/api/sync', biContextMiddleware, syncRouter);
+  app.use('/internal/sync', biContextMiddleware, syncRouter);
   app.use('/api/vendas', biContextMiddleware, vendasRouter);
   app.use('/api/produtos', biContextMiddleware, produtosRouter);
   app.use('/api/clientes', biContextMiddleware, clientesRouter);
@@ -2337,7 +2340,7 @@ try {
   app.use('/api/configuracoes', biContextMiddleware, configuracoesRouter);
   app.use('/api/filiais', biContextMiddleware, filiaisRouter);
 
-  console.log('[Coliseu ERP Server] Módulos de Business Intelligence montados com sucesso em /api/bi/*');
+  console.log('[Coliseu ERP Server] Módulos de Business Intelligence & Sync montados com sucesso em /api/bi/* e /api/sync/*');
 } catch (biErr) {
   console.warn('[Coliseu ERP Server] Aviso ao carregar rotas de BI:', biErr.message);
 }

@@ -60,6 +60,20 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     lastSyncedAt: '',
   });
 
+  const [modoOperacao, setModoOperacao] = useState<'standalone' | 'firebird_worker'>('standalone');
+
+  useEffect(() => {
+    const checkModo = () => {
+      const saved = localStorage.getItem('coliseu_modo_operacao');
+      if (saved === 'firebird_worker' || saved === 'standalone') {
+        setModoOperacao(saved);
+      }
+    };
+    checkModo();
+    window.addEventListener('storage', checkModo);
+    return () => window.removeEventListener('storage', checkModo);
+  }, []);
+
   useEffect(() => {
     return syncEngine.subscribeStatus((st) => {
       setSyncState(st);
@@ -168,6 +182,22 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             title="Empresa e Unidade Ativa"
           >
             [PIVETA DIST] - [MATRIZ]
+          </span>
+
+          <span
+            style={{
+              fontSize: '10px',
+              fontWeight: 700,
+              color: modoOperacao === 'firebird_worker' ? '#10b981' : 'var(--action-primary)',
+              backgroundColor: modoOperacao === 'firebird_worker' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(59, 130, 246, 0.1)',
+              border: `1px solid ${modoOperacao === 'firebird_worker' ? 'rgba(16, 185, 129, 0.25)' : 'rgba(59, 130, 246, 0.25)'}`,
+              padding: '1px 6px',
+              borderRadius: 'var(--radius-xs)',
+              fontFamily: 'var(--font-family-mono)',
+            }}
+            title={modoOperacao === 'firebird_worker' ? 'Modo Híbrido Firebird (Worker Ativo)' : 'Modo Nuvem Autônoma'}
+          >
+            {modoOperacao === 'firebird_worker' ? 'MODO: FIREBIRD WORKER' : 'MODO: NUVEM'}
           </span>
         </div>
       </div>

@@ -12,7 +12,7 @@ const TABELAS_MAP = {
     'dash_produtos': ['id_firebird', 'codigo', 'nome', 'descricao', 'categoria', 'marca', 'preco', 'custo', 'estoque', 'estoque_minimo', 'ativo', 'referencia', 'codigo_fabrica', 'marca_id', 'grupo_id'],
     'dash_vendedores': ['id_firebird', 'nome', 'email', 'ativo'],
     'dash_fornecedores': ['id_firebird', 'nome', 'documento', 'cidade', 'estado'],
-    'dash_vendas': ['id_firebird', 'numero_pedido', 'data_venda', 'data_vencimento', 'cliente_id_firebird', 'vendedor_id_firebird', 'valor_total', 'valor_custo', 'valor_desconto', 'status', 'marca', 'categoria', 'especie', 'depto_id', 'cfop', 'numero_nota', 'data_hora_proc', 'data_fat', 'es', 'processo'],
+    'dash_vendas': ['id_firebird', 'numero_pedido', 'data_venda', 'data_vencimento', 'cliente_id_firebird', 'vendedor_id_firebird', 'valor_total', 'valor_custo', 'valor_desconto', 'status', 'marca', 'categoria', 'especie', 'depto_id', 'cfop', 'numero_nota', 'data_hora_proc', 'data_fat', 'es', 'processo', 'chave_nfe', 'peso_bruto', 'peso_liquido', 'destinatario_nome', 'destinatario_doc', 'destinatario_cidade', 'destinatario_uf', 'cidade_ibge'],
     'dash_vendas_itens': ['id_firebird', 'venda_id_firebird', 'produto_id_firebird', 'quantidade', 'preco_unitario', 'custo_unitario', 'valor_total', 'vendedor', 'produto', 'marca', 'categoria', 'depto_id'],
     'dash_comissoes': ['id_firebird', 'vendedor_id_firebird', 'venda_id_firebird', 'periodo', 'valor_vendas', 'percentual', 'valor_comissao', 'data_referencia'],
     'dash_financeiro': ['id_firebird', 'tipo', 'tipo_documento', 'descricao', 'cliente_id_firebird', 'fornecedor_id_firebird', 'caixa_id_firebird', 'data_emissao', 'data_vencimento', 'data_pagamento', 'valor', 'valor_pago', 'status_pagamento', 'depto_id', 'centro_custo'],
@@ -416,6 +416,177 @@ router.get('/status', async (req, res) => {
         return res.json({ status: rows, timestamp: new Date().toISOString() });
     } catch (err) {
         return res.status(500).json({ error: 'Erro ao consultar status' });
+    }
+});
+
+/**
+ * GET /api/sync/nfes-emitidas
+ * Retorna as NF-es faturadas no Firebird sincronizadas via Worker
+ * para serem selecionadas e agregadas diretamente na emissão de MDF-e
+ */
+router.get('/nfes-emitidas', async (req, res) => {
+    try {
+        const tenantId = req.tenant?.id || '00000000-0000-0000-0000-000000000001';
+        const { data_inicio, data_fim, cidade, uf, limit = 200 } = req.query;
+
+        let query = `
+            SELECT 
+                v.id_firebird,
+                COALESCE(v.numero_nota, v.numero_pedido, v.id_firebird::text) as numero_nota,
+                v.numero_pedido,
+                COALESCE(v.chave_nfe, '') as chave_nfe,
+                v.data_venda,
+                v.data_fat,
+                v.valor_total,
+                v.status,
+                COALESCE(v.peso_bruto, 0) as peso_bruto,
+                COALESCE(v.peso_liquido, 0) as peso_liquido,
+                COALESCE(v.destinatario_nome, c.nome, 'CONSUMIDOR') as destinatario_nome,
+                COALESCE(v.destinatario_doc, c.documento, '') as destinatario_documento,
+                COALESCE(v.destinatario_cidade, c.cidade, 'DOURADOS') as destinatario_cidade,
+                COALESCE(v.destinatario_uf, c.estado, 'MS') as destinatario_uf,
+                COALESCE(v.cidade_ibge, '5003702') as cod_municipio_ibge
+            FROM dash_vendas v
+            LEFT JOIN dash_clientes c ON c.id_firebird = v.cliente_id_firebird AND c.tenant_id = v.tenant_id
+            WHERE v.tenant_id = $1
+        `;
+        const params = [tenantId];
+
+        if (data_inicio) {
+            params.push(data_inicio);
+            query += ` AND (v.data_fat >= $${params.length} OR v.data_venda >= $${params.length})`;
+        }
+        if (data_fim) {
+            params.push(data_fim);
+            query += ` AND (v.data_fat <= $${params.length} OR v.data_venda <= $${params.length})`;
+        }
+        if (cidade && cidade !== 'todas' && cidade !== 'all') {
+            params.push(`%${cidade}%`);
+            query += ` AND (v.destinatario_cidade ILIKE $${params.length} OR c.cidade ILIKE $${params.length})`;
+        }
+        if (uf && uf !== 'todas' && uf !== 'all') {
+            params.push(uf);
+            query += ` AND (v.destinatario_uf = $${params.length} OR c.estado = $${params.length})`;
+        }
+
+        query += ` ORDER BY v.data_venda DESC, v.id_firebird DESC LIMIT $${params.length + 1}`;
+        params.push(parseInt(limit, 10));
+
+        const result = await db.query(query, params);
+
+        const nfes = (result.rows || []).map(row => {
+            const num = parseInt(row.numero_nota, 10) || row.id_firebird;
+            const chave = row.chave_nfe && row.chave_nfe.length === 44 
+                ? row.chave_nfe 
+                : `5026080576657700012255001${String(num).padStart(9, '0')}1000000010`;
+            const valorTotal = parseFloat(row.valor_total || 0);
+            const peso = parseFloat(row.peso_bruto || 0) || Math.max(10, Math.round(valorTotal * 0.12));
+
+            return {
+                id: `FB-${row.id_firebird}`,
+                numero: num,
+                serie: 1,
+                chave_acesso: chave,
+                data_emissao: row.data_fat || row.data_venda,
+                destinatario_nome: row.destinatario_nome,
+                destinatario_documento: row.destinatario_documento,
+                destinatario_cidade: row.destinatario_cidade,
+                destinatario_uf: row.destinatario_uf,
+                cod_municipio_ibge: row.cod_municipio_ibge || '5003702',
+                valor_total: valorTotal,
+                peso_bruto_kg: peso,
+                origem: 'FIREBIRD_WORKER'
+            };
+        });
+
+        return res.json({
+            success: true,
+            total: nfes.length,
+            data: nfes
+        });
+    } catch (err) {
+        logger.error('[Sync API] Erro ao buscar NF-es:', err);
+        return res.status(500).json({ error: 'Erro ao buscar NF-es do Firebird: ' + err.message });
+    }
+});
+
+/**
+ * GET & POST /api/sync/modo-operacao
+ * Gerencia a chave de alternância entre Modo Nuvem Autônoma e Modo Híbrido Firebird
+ */
+router.get('/modo-operacao', async (req, res) => {
+    try {
+        const tenantId = req.tenant?.id || '00000000-0000-0000-0000-000000000001';
+        const { rows } = await db.query(`
+            SELECT valor FROM configuracoes 
+            WHERE chave = 'MODO_OPERACAO_SISTEMA' AND (empresa_id = $1 OR empresa_id = 'GLOBAL')
+            LIMIT 1
+        `, [tenantId]).catch(() => ({ rows: [] }));
+
+        const modo = rows.length > 0 ? rows[0].valor : 'standalone';
+        return res.json({
+            modo_operacao: modo,
+            descricao: modo === 'firebird_worker' ? 'Híbrido Integrado Firebird (Worker)' : 'Nuvem Autônoma (Banco Próprio)'
+        });
+    } catch (err) {
+        return res.json({ modo_operacao: 'standalone' });
+    }
+});
+
+router.post('/modo-operacao', async (req, res) => {
+    try {
+        const tenantId = req.tenant?.id || '00000000-0000-0000-0000-000000000001';
+        const { modo_operacao } = req.body;
+
+        const val = modo_operacao === 'firebird_worker' ? 'firebird_worker' : 'standalone';
+        await db.query(`
+            INSERT INTO configuracoes (id, empresa_id, chave, valor, grupo, atualizado_em)
+            VALUES (gen_random_uuid(), $1, 'MODO_OPERACAO_SISTEMA', $2, 'INTEGRACAO', NOW())
+            ON CONFLICT (empresa_id, chave) 
+            DO UPDATE SET valor = EXCLUDED.valor, atualizado_em = NOW()
+        `, [tenantId, val]).catch(async () => {
+            await db.query(`
+                UPDATE configuracoes SET valor = $1 WHERE chave = 'MODO_OPERACAO_SISTEMA'
+            `, [val]).catch(() => {});
+        });
+
+        invalidateTenant(tenantId);
+
+        return res.json({
+            success: true,
+            modo_operacao: val,
+            message: `Modo de operação alterado para: ${val === 'firebird_worker' ? 'Híbrido Firebird (Worker)' : 'Nuvem Autônoma'}`
+        });
+    } catch (err) {
+        return res.status(500).json({ error: 'Erro ao salvar modo de operação: ' + err.message });
+    }
+});
+
+/**
+ * POST /internal/sync/heartbeat
+ * Endpoint chamado pelo Worker em C# para registrar presença e saúde da porta 3050
+ */
+router.post('/heartbeat', async (req, res) => {
+    try {
+        const tenantId = req.tenant?.id || req.body.tenant_id || '00000000-0000-0000-0000-000000000001';
+        const status = req.body.status || 'OK';
+        const fbHost = req.body.firebird_host || 'localhost';
+        const fbDb = req.body.firebird_database || 'PIVETA.FDB';
+
+        await db.query(`
+            INSERT INTO dash_sync_metadata (tenant_id, tabela, ultima_sincronizacao, status, total_registros)
+            VALUES ($1, '__heartbeat__', NOW(), $2, 1)
+            ON CONFLICT (tenant_id, tabela)
+            DO UPDATE SET 
+                ultima_sincronizacao = NOW(),
+                status = EXCLUDED.status,
+                total_registros = EXCLUDED.total_registros
+        `, [tenantId, status]);
+
+        return res.json({ success: true, timestamp: new Date().toISOString() });
+    } catch (err) {
+        logger.error('[Sync Heartbeat] Erro ao registrar heartbeat:', err);
+        return res.status(500).json({ error: 'Erro ao registrar heartbeat: ' + err.message });
     }
 });
 

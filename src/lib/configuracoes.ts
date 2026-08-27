@@ -172,4 +172,61 @@ export const configuracoesService = {
   async carregarConfigNfseFilial(filialId: string): Promise<FilialNfseConfigInput | null> {
     return await invoke<FilialNfseConfigInput | null>('carregar_config_nfse_filial', { filialId });
   },
+
+  // =========================================================================
+  // GESTÃO DO MODO DE OPERAÇÃO (NUVEM AUTÔNOMA VS HÍBRIDO FIREBIRD)
+  // =========================================================================
+  async getModoOperacao(): Promise<{ modo_operacao: 'standalone' | 'firebird_worker'; descricao: string }> {
+    try {
+      const res = await fetch('/api/sync/modo-operacao');
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // ignore
+    }
+    const saved = localStorage.getItem('coliseu_modo_operacao');
+    return {
+      modo_operacao: (saved === 'firebird_worker' ? 'firebird_worker' : 'standalone'),
+      descricao: saved === 'firebird_worker' ? 'Híbrido Integrado Firebird (Worker)' : 'Nuvem Autônoma (Banco Próprio)'
+    };
+  },
+
+  async setModoOperacao(modo: 'standalone' | 'firebird_worker'): Promise<{ success: boolean; modo_operacao: string }> {
+    localStorage.setItem('coliseu_modo_operacao', modo);
+    try {
+      const res = await fetch('/api/sync/modo-operacao', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modo_operacao: modo }),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // ignore
+    }
+    return { success: true, modo_operacao: modo };
+  },
+
+  async getWorkerSyncStatus(): Promise<any> {
+    try {
+      const res = await fetch('/api/sync/status');
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (err: any) {
+      return { error: err.message, status: [] };
+    }
+    return { status: [] };
+  },
+
+  async forcarSyncWorker(): Promise<any> {
+    try {
+      const res = await fetch('/api/sync/force', { method: 'POST' });
+      return await res.json();
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  }
 };
