@@ -421,13 +421,40 @@ export const ModalFaturamentoNFe: React.FC<ModalFaturamentoNFeProps> = ({
                 <Button
                   variant="secondary"
                   onClick={async () => {
-                    let xml = await obterXmlRealDoDisco(notaAutorizada.chave);
-                    if (!xml) {
-                      xml = gerarXmlNFe(pedido, notaAutorizada.chave, notaAutorizada.protocolo, tPag, modFrete, infCpl);
-                    }
-                    const salvo = await salvarArquivoComDialogo(`${notaAutorizada.chave}-procNFe.xml`, xml, 'xml');
-                    if (salvo) {
-                      alert(`✅ XML da NF-e salvo com sucesso em:\n${salvo}`);
+                    try {
+                      let xml = '';
+                      // 1. Tenta buscar o XML oficial autorizado gravado na VPS
+                      try {
+                        const res = await fetch(`/api/fiscal/xml/${notaAutorizada.chave}`);
+                        if (res.ok) {
+                          xml = await res.text();
+                        }
+                      } catch {}
+
+                      // 2. Se não encontrou no servidor, tenta disco local ou gera
+                      if (!xml || xml.includes('<!DOCTYPE')) {
+                        xml = (await obterXmlRealDoDisco(notaAutorizada.chave)) || '';
+                      }
+                      if (!xml) {
+                        xml = gerarXmlNFe(pedido, notaAutorizada.chave, notaAutorizada.protocolo, tPag, modFrete, infCpl);
+                      }
+
+                      const nomeArquivo = `${notaAutorizada.chave}-procNFe.xml`;
+                      
+                      // Forçar download nativo no navegador
+                      const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = nomeArquivo;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+
+                      alert(`✅ XML da NF-e baixado com sucesso!\n\n• Arquivo: ${nomeArquivo}\n• Chave: ${notaAutorizada.chave}\n\nO arquivo foi salvo na sua pasta de Downloads do computador.`);
+                    } catch (e: any) {
+                      alert(`Erro ao baixar XML: ${e.message}`);
                     }
                   }}
                   leftIcon={<Download size={15} />}

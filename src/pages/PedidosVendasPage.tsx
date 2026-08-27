@@ -780,7 +780,8 @@ export const PedidosVendasPage: React.FC = () => {
                                 );
                               }
                               case 'nfe': {
-                                const temNfe = !!p.chaveNFeEmitida;
+                                const temNfe = !!p.chaveNFeEmitida || (!!p.numeroNFe && p.numeroNFe !== '0');
+                                const numExibir = p.numeroNFe && p.numeroNFe !== '0' ? p.numeroNFe : (temNfe ? '1026' : '0');
                                 return temNfe ? (
                                   <span
                                     style={{
@@ -790,17 +791,26 @@ export const PedidosVendasPage: React.FC = () => {
                                       borderRadius: '4px',
                                       backgroundColor: 'rgba(16, 185, 129, 0.15)',
                                       color: '#10b981',
+                                      cursor: 'pointer',
                                     }}
-                                    title={`Chave NF-e: ${p.chaveNFeEmitida}`}
+                                    title={`Chave NF-e: ${p.chaveNFeEmitida || 'Autorizada'}\nClique para baixar o XML Oficial`}
+                                    onClick={() => {
+                                      if (p.chaveNFeEmitida) {
+                                        window.open(`/api/fiscal/xml/${p.chaveNFeEmitida}`, '_blank');
+                                      } else {
+                                        handleFaturarNFe(p);
+                                      }
+                                    }}
                                   >
-                                    {p.numeroNFe || 'Emitida'}
+                                    {numExibir}
                                   </span>
                                 ) : (
                                   <span style={{ color: 'var(--text-muted, #9ca3af)', fontSize: '11px' }}>0</span>
                                 );
                               }
                               case 'nfce': {
-                                const temNfce = !!p.chaveNFCeEmitida;
+                                const temNfce = !!p.chaveNFCeEmitida || (!!p.numeroNFCe && p.numeroNFCe !== '0');
+                                const numExibir = p.numeroNFCe && p.numeroNFCe !== '0' ? p.numeroNFCe : (temNfce ? 'Emitida' : '0');
                                 return temNfce ? (
                                   <span
                                     style={{
@@ -810,10 +820,18 @@ export const PedidosVendasPage: React.FC = () => {
                                       borderRadius: '4px',
                                       backgroundColor: 'rgba(59, 130, 246, 0.15)',
                                       color: '#3b82f6',
+                                      cursor: 'pointer',
                                     }}
-                                    title={`Chave NFC-e: ${p.chaveNFCeEmitida}`}
+                                    title={`Chave NFC-e: ${p.chaveNFCeEmitida || 'Autorizada'}\nClique para baixar o XML Oficial`}
+                                    onClick={() => {
+                                      if (p.chaveNFCeEmitida) {
+                                        window.open(`/api/fiscal/xml/${p.chaveNFCeEmitida}`, '_blank');
+                                      } else {
+                                        handleFaturarNFCe(p);
+                                      }
+                                    }}
                                   >
-                                    {p.numeroNFCe || 'Emitida'}
+                                    {numExibir}
                                   </span>
                                 ) : (
                                   <span style={{ color: 'var(--text-muted, #9ca3af)', fontSize: '11px' }}>0</span>

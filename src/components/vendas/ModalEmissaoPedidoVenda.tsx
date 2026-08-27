@@ -101,6 +101,17 @@ export const ModalEmissaoPedidoVenda: React.FC<ModalEmissaoPedidoVendaProps> = (
   const [formaPagamentoNome, setFormaPagamentoNome] = useState(pedidoEdicao?.formaPagamentoNome || '30 DIAS (BOLETO BANCÁRIO)');
   const [parcelas, setParcelas] = useState<ParcelaPedidoVenda[]>(pedidoEdicao?.parcelas || []);
 
+  // Metadados Fiscais Vinculados (NF-e / NFC-e)
+  const [numeroNFe, setNumeroNFe] = useState(pedidoEdicao?.numeroNFe);
+  const [chaveNFeEmitida, setChaveNFeEmitida] = useState(pedidoEdicao?.chaveNFeEmitida);
+  const [statusFiscalNfe, setStatusFiscalNfe] = useState(pedidoEdicao?.statusFiscalNfe);
+  const [protocoloAutorizacao, setProtocoloAutorizacao] = useState(pedidoEdicao?.protocoloAutorizacao);
+  const [dataAutorizacaoSefaz, setDataAutorizacaoSefaz] = useState(pedidoEdicao?.dataAutorizacaoSefaz);
+  const [dataFaturamento, setDataFaturamento] = useState(pedidoEdicao?.dataFaturamento);
+  const [numeroNFCe, setNumeroNFCe] = useState(pedidoEdicao?.numeroNFCe);
+  const [chaveNFCeEmitida, setChaveNFCeEmitida] = useState(pedidoEdicao?.chaveNFCeEmitida);
+  const [statusFiscalNfce, setStatusFiscalNfce] = useState(pedidoEdicao?.statusFiscalNfce);
+
   // Modais Secundários
   const [isModalBuscaClientesOpen, setIsModalBuscaClientesOpen] = useState(false);
   const [isModalFaturamentoOpen, setIsModalFaturamentoOpen] = useState(false);
@@ -387,8 +398,15 @@ export const ModalEmissaoPedidoVenda: React.FC<ModalEmissaoPedidoVendaProps> = (
       formaPagamentoNome,
       parcelas,
       observacoesGerais,
-      numeroNFe: pedidoEdicao?.numeroNFe,
-      chaveNFeEmitida: pedidoEdicao?.chaveNFeEmitida,
+      numeroNFe: numeroNFe || pedidoEdicao?.numeroNFe,
+      chaveNFeEmitida: chaveNFeEmitida || pedidoEdicao?.chaveNFeEmitida,
+      statusFiscalNfe: statusFiscalNfe || pedidoEdicao?.statusFiscalNfe,
+      protocoloAutorizacao: protocoloAutorizacao || pedidoEdicao?.protocoloAutorizacao,
+      dataAutorizacaoSefaz: dataAutorizacaoSefaz || pedidoEdicao?.dataAutorizacaoSefaz,
+      dataFaturamento: dataFaturamento || pedidoEdicao?.dataFaturamento,
+      numeroNFCe: numeroNFCe || pedidoEdicao?.numeroNFCe,
+      chaveNFCeEmitida: chaveNFCeEmitida || pedidoEdicao?.chaveNFCeEmitida,
+      statusFiscalNfce: statusFiscalNfce || pedidoEdicao?.statusFiscalNfce,
     };
   };
 
@@ -1283,6 +1301,12 @@ export const ModalEmissaoPedidoVenda: React.FC<ModalEmissaoPedidoVendaProps> = (
           pedido={montarObjetoPedido('EM_FATURAMENTO')}
           onFaturamentoConcluido={(faturado) => {
             setStatus('EM_FATURAMENTO');
+            setNumeroNFe(faturado.numeroNFe);
+            setChaveNFeEmitida(faturado.chaveNFeEmitida);
+            setStatusFiscalNfe(faturado.statusFiscalNfe);
+            setProtocoloAutorizacao(faturado.protocoloAutorizacao);
+            setDataAutorizacaoSefaz(faturado.dataAutorizacaoSefaz);
+            setDataFaturamento(faturado.dataFaturamento);
             faturado.status = 'EM_FATURAMENTO';
             salvarPedidoVenda(faturado);
             onSaveSuccess(faturado);
@@ -1298,6 +1322,12 @@ export const ModalEmissaoPedidoVenda: React.FC<ModalEmissaoPedidoVendaProps> = (
           pedido={montarObjetoPedido('EM_FATURAMENTO')}
           onFaturamentoConcluido={(faturado) => {
             setStatus('EM_FATURAMENTO');
+            setNumeroNFCe(faturado.numeroNFCe);
+            setChaveNFCeEmitida(faturado.chaveNFCeEmitida);
+            setStatusFiscalNfce(faturado.statusFiscalNfce);
+            setProtocoloAutorizacao(faturado.protocoloAutorizacao);
+            setDataAutorizacaoSefaz(faturado.dataAutorizacaoSefaz);
+            setDataFaturamento(faturado.dataFaturamento);
             faturado.status = 'EM_FATURAMENTO';
             salvarPedidoVenda(faturado);
             onSaveSuccess(faturado);
