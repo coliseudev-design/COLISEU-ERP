@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<cteProc versao="4.00" xmlns="http://www.portalfiscal.inf.br/cte">
+  <CTe xmlns="http://www.portalfiscal.inf.br/cte">
+    <infCte Id="CTe50260805766577000122570010000000801112233447" versao="4.00">
+      <ide>
+        <cUF>50</cUF>
+        <cCT>11223344</cCT>
+        <CFOP>5353</CFOP>
+        <natOp>PRESTACAO DE SERVICO DE TRANSPORTE</natOp>
+        <mod>57</mod>
+        <serie>1</serie>
+        <nCT>80</nCT>
+        <dhEmi>2026-08-25T10:00:00.000Z</dhEmi>
+        <tpImp>1</tpImp>
+        <tpEmis>1</tpEmis>
+        <cDV>7</cDV>
+        <tpAmb>1</tpAmb>
+        <tpCTe>0</tpCTe>
+        <procEmi>0</procEmi>
+        <verProc>ColiseuCTe_4.00</verProc>
+      </ide>
+      <emit>
+        <CNPJ>05766577000122</CNPJ>
+        <IE>283261864</IE>
+        <xNome>COLISEU TRANSPORTES LTDA</xNome>
+        <enderEmit>
+          <xLgr>RODOVIA BR 163</xLgr>
+          <nro>KM 10</nro>
+          <xBairro>DISTRITO INDUSTRIAL</xBairro>
+          <cMun>5003702</cMun>
+          <xMun>DOURADOS</xMun>
+          <UF>MS</UF>
+        </enderEmit>
+      </emit>
+      <vPrest>
+        <vTPrest>850.00</vTPrest>
+        <vRec>850.00</vRec>
+      </vPrest>
+    </infCte>
+  </CTe>
+  <protCTe versao="4.00">
+    <infProt>
+      <tpAmb>1</tpAmb>
+      <verAplic>Coliseu_CTe_4.00</verAplic>
+      <chCTe>50260805766577000122570010000000801112233447</chCTe>
+      <dhRecbto>2026-08-25T10:00:00.000Z</dhRecbto>
+      <nProt>150260000005757</nProt>
+      <cStat>100</cStat>
+      <xMotivo>Autorizado o uso do CT-e</xMotivo>
+    </infProt>
+  </protCTe>
+</cteProc>

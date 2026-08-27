@@ -28,12 +28,16 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# Instalar curl e wget para healthcheck robusto
+RUN apk add --no-cache curl wget
+
 # Copiar manifestos de dependências de produção
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --prefer-offline --no-audit
 
-# Copiar script do servidor de API, sincronização e motor fiscal
+# Copiar script do servidor de API, sincronização, motor fiscal e rotas de BI/Backend
 COPY server.js fiscalEngine.js ./
+COPY src-server ./src-server
 
 # Copiar os arquivos estáticos compilados do estágio anterior
 COPY --from=builder /app/dist ./dist
@@ -43,7 +47,7 @@ EXPOSE 80 3000
 
 # Healthcheck do container (IPv4 direto 127.0.0.1)
 HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://127.0.0.1:80/api/health || wget --quiet --tries=1 --spider http://127.0.0.1:3000/api/health || exit 1
+  CMD curl -f http://127.0.0.1:80/api/health || curl -f http://127.0.0.1:3000/api/health || wget --quiet --tries=1 --spider http://127.0.0.1:80/api/health || exit 1
 
 # Iniciar Servidor Node.js
 CMD ["node", "server.js"]

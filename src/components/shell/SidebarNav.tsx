@@ -64,6 +64,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
 }) => {
   const [filterQuery, setFilterQuery] = useState('');
   const [openDomains, setOpenDomains] = useState<Record<string, boolean>>({
+    'Business Intelligence': true,
     Comercial: true,
     Compras: false,
     Estoque: false,
@@ -103,7 +104,21 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
 
   const navItems: NavItem[] = useMemo(
     () => [
-      { id: 'dashboard', label: 'Visão Executiva', icon: <LayoutDashboard size={15} aria-hidden="true" />, domain: 'Comercial', domainColor: 'var(--domain-comercial)' },
+      { id: 'bi', label: 'Inteligência de Vendas', icon: <TrendingUp size={15} aria-hidden="true" />, domain: 'Business Intelligence', domainColor: '#06b6d4' },
+      { id: 'bi/hub', label: 'Central de Pedidos (Hub)', icon: <Receipt size={15} aria-hidden="true" />, domain: 'Business Intelligence', domainColor: '#06b6d4' },
+      { id: 'bi/vendedor', label: 'Hub do Vendedor', icon: <Users size={15} aria-hidden="true" />, domain: 'Business Intelligence', domainColor: '#06b6d4' },
+      { id: 'bi/abc', label: 'Curva ABC (Pareto 80/20)', icon: <Layers size={15} aria-hidden="true" />, domain: 'Business Intelligence', domainColor: '#06b6d4' },
+      { id: 'bi/finance', label: 'BI Financeiro & Liquidez', icon: <DollarSign size={15} aria-hidden="true" />, domain: 'Business Intelligence', domainColor: '#06b6d4' },
+      { id: 'bi/customer', label: 'Radar 360° do Cliente', icon: <Activity size={15} aria-hidden="true" />, domain: 'Business Intelligence', domainColor: '#06b6d4' },
+      { id: 'bi/comparative', label: 'Análise Comparativa (MoM/YoY)', icon: <ArrowRightLeft size={15} aria-hidden="true" />, domain: 'Business Intelligence', domainColor: '#06b6d4' },
+      { id: 'bi/customer-analytics', label: 'Analytics & Churn Clientes', icon: <Users size={15} aria-hidden="true" />, domain: 'Business Intelligence', domainColor: '#06b6d4' },
+      { id: 'bi/goals', label: 'Gestor & Atingimento Metas', icon: <Target size={15} aria-hidden="true" />, domain: 'Business Intelligence', domainColor: '#06b6d4' },
+      { id: 'bi/supplier', label: 'Performance de Fornecedores', icon: <Building size={15} aria-hidden="true" />, domain: 'Business Intelligence', domainColor: '#06b6d4' },
+      { id: 'bi/heatmap', label: 'Heatmap de Vendas', icon: <Sparkles size={15} aria-hidden="true" />, domain: 'Business Intelligence', domainColor: '#06b6d4' },
+      { id: 'bi/ai-insights', label: 'AI Insights & Oportunidades', icon: <Sparkles size={15} aria-hidden="true" />, domain: 'Business Intelligence', domainColor: '#06b6d4' },
+      { id: 'inteligencia', label: 'Estratégia & Performance', icon: <TrendingUp size={15} aria-hidden="true" />, domain: 'Business Intelligence', domainColor: '#06b6d4' },
+
+      { id: 'dashboard', label: 'Visão Executiva 360°', icon: <LayoutDashboard size={15} aria-hidden="true" />, domain: 'Comercial', domainColor: 'var(--domain-comercial)' },
       { id: 'pessoas', label: 'Clientes & Parceiros', icon: <Users size={15} aria-hidden="true" />, domain: 'Comercial', domainColor: 'var(--domain-comercial)' },
       { id: 'products', label: 'Catálogo de Produtos', icon: <Package size={15} aria-hidden="true" />, domain: 'Comercial', domainColor: 'var(--domain-comercial)' },
       { id: 'pdv', label: 'Caixa PDV', icon: <Store size={15} aria-hidden="true" />, domain: 'Comercial', domainColor: 'var(--domain-comercial)' },

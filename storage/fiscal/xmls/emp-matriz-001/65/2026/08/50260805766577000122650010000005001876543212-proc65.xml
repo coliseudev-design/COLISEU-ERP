@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe">
+  <NFe xmlns="http://www.portalfiscal.inf.br/nfe">
+    <infNFe Id="NFe50260805766577000122650010000005001876543212" versao="4.00">
+      <ide>
+        <cUF>50</cUF>
+        <cNF>87654321</cNF>
+        <natOp>VENDA A CONSUMIDOR</natOp>
+        <mod>65</mod>
+        <serie>1</serie>
+        <nNF>500</nNF>
+        <dhEmi>2026-08-25T10:00:00.000Z</dhEmi>
+        <tpNF>1</tpNF>
+        <idDest>1</idDest>
+        <cMunFG>5003702</cMunFG>
+        <tpImp>4</tpImp>
+        <tpEmis>1</tpEmis>
+        <cDV>2</cDV>
+        <tpAmb>1</tpAmb>
+        <finNFe>1</finNFe>
+        <indFinal>1</indFinal>
+        <indPres>1</indPres>
+        <procEmi>0</procEmi>
+        <verProc>ColiseuERP_NFCe_6.5</verProc>
+      </ide>
+      <emit>
+        <CNPJ>05766577000122</CNPJ>
+        <xNome>COLISEU SISTEMAS LTDA</xNome>
+        <enderEmit>
+          <xLgr>AVENIDA COMERCIAL</xLgr>
+          <nro>1200</nro>
+          <xBairro>CENTRO</xBairro>
+          <cMun>5003702</cMun>
+          <xMun>DOURADOS</xMun>
+          <UF>MS</UF>
+          <CEP>79800000</CEP>
+          <cPais>1058</cPais>
+          <xPais>BRASIL</xPais>
+        </enderEmit>
+        <IE>283261864</IE>
+        <CRT>1</CRT>
+      </emit>
+      <det nItem="1">
+        <prod>
+          <cProd>1</cProd>
+          <cEAN>SEM GTIN</cEAN>
+          <xProd>VENDA EM BALCAO PDV</xProd>
+          <NCM>84713012</NCM>
+          <CFOP>5102</CFOP>
+          <uCom>UN</uCom>
+          <qCom>1.0000</qCom>
+          <vUnCom>129.90</vUnCom>
+          <vProd>129.90</vProd>
+          <cEANTrib>SEM GTIN</cEANTrib>
+          <uTrib>UN</uTrib>
+          <qTrib>1.0000</qTrib>
+          <vUnTrib>129.90</vUnTrib>
+          <indTot>1</indTot>
+        </prod>
+        <imposto>
+          <ICMS><ICMSSN102><orig>0</orig><CSOSN>102</CSOSN></ICMSSN102></ICMS>
+        </imposto>
+      </det>
+      <total>
+        <ICMSTot>
+          <vProd>129.90</vProd>
+          <vNF>129.90</vNF>
+        </ICMSTot>
+      </total>
+      <transp><modFrete>9</modFrete></transp>
+      <pag>
+        <detPag>
+          <tPag>01</tPag>
+          <vPag>129.90</vPag>
+        </detPag>
+      </pag>
+      <infNFeSupl>
+        <qrCode><![CDATA[http://www.dfe.ms.gov.br/nfce/qrcode?p=50260805766577000122650010000005001876543212|2|1|1|e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855]]></qrCode>
+        <urlChave>http://www.dfe.ms.gov.br/nfce/consulta</urlChave>
+      </infNFeSupl>
+    </infNFe>
+  </NFe>
+  <protNFe versao="4.00">
+    <infProt>
+      <tpAmb>1</tpAmb>
+      <verAplic>Coliseu_NFCe_4.00</verAplic>
+      <chNFe>50260805766577000122650010000005001876543212</chNFe>
+      <dhRecbto>2026-08-25T10:00:00.000Z</dhRecbto>
+      <nProt>150260000009876</nProt>
+      <cStat>100</cStat>
+      <xMotivo>Autorizado o uso da NFC-e</xMotivo>
+    </infProt>
+  </protNFe>
+</nfeProc>

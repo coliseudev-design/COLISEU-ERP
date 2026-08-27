@@ -1607,7 +1607,6 @@ app.post('/api/fiscal/emitir', async (req, res) => {
     }
 
     // 2. Transmissão para o WebService SEFAZ (Modelo 55 ou 65)
-    let transmissaoReal = null;
     if (modStr === '55' || modStr === '65') {
       try {
         transmissaoReal = await transmitirLoteNFeSefaz({
@@ -2297,6 +2296,51 @@ app.post('/api/fiscal/inutilizar', async (req, res) => {
     return res.status(500).json({ error: 'Falha ao processar inutilização: ' + err.message });
   }
 });
+
+// =========================================================================
+// MÓDULOS DE BUSINESS INTELLIGENCE & ANALYTICS (COLISEU-DASH)
+// =========================================================================
+try {
+  const biRouter = require('./src-server/routes/bi');
+  const vendasRouter = require('./src-server/routes/vendas');
+  const produtosRouter = require('./src-server/routes/produtos');
+  const clientesRouter = require('./src-server/routes/clientes');
+  const financeiroRouter = require('./src-server/routes/financeiro');
+  const estatisticasRouter = require('./src-server/routes/estatisticas');
+  const rankingRouter = require('./src-server/routes/ranking');
+  const usuariosRouter = require('./src-server/routes/usuarios');
+  const gruposRouter = require('./src-server/routes/grupos');
+  const configuracoesRouter = require('./src-server/routes/configuracoes');
+  const { router: filiaisRouter } = require('./src-server/routes/filiais');
+
+  const biContextMiddleware = (req, res, next) => {
+    if (!req.tenant) {
+      req.tenant = { id: req.headers['x-tenant-id'] || '00000000-0000-0000-0000-000000000001', name: 'Matriz' };
+    }
+    if (!req.user) {
+      req.user = { id: 1, email: 'admin@coliseu.com', role: 'admin', allowedSellers: [] };
+    }
+    next();
+  };
+
+  app.use('/api/bi', biContextMiddleware, biRouter);
+  app.use('/api/vendas', biContextMiddleware, vendasRouter);
+  app.use('/api/produtos', biContextMiddleware, produtosRouter);
+  app.use('/api/clientes', biContextMiddleware, clientesRouter);
+  app.use('/api/financeiro', biContextMiddleware, financeiroRouter);
+  app.use('/api/estatisticas', biContextMiddleware, estatisticasRouter);
+  app.use('/api/ranking', biContextMiddleware, rankingRouter);
+  app.use('/api/comissoes', biContextMiddleware, rankingRouter);
+  app.use('/api/usuarios', biContextMiddleware, usuariosRouter);
+  app.use('/api/grupos', biContextMiddleware, gruposRouter);
+  app.use('/api/goals', biContextMiddleware, gruposRouter);
+  app.use('/api/configuracoes', biContextMiddleware, configuracoesRouter);
+  app.use('/api/filiais', biContextMiddleware, filiaisRouter);
+
+  console.log('[Coliseu ERP Server] Módulos de Business Intelligence montados com sucesso em /api/bi/*');
+} catch (biErr) {
+  console.warn('[Coliseu ERP Server] Aviso ao carregar rotas de BI:', biErr.message);
+}
 
 // =========================================================================
 // SERVIR FRONTEND SPA (VITE / REACT)

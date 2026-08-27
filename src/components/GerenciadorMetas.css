@@ -1,0 +1,76 @@
+/* Styles for goals management panel (Gerenciador de Metas) */
+
+.metas-input-goal {
+  width: 160px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  text-align: right;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  font-family: var(--font-mono, monospace);
+  font-weight: 600;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.metas-input-goal:focus {
+  border-color: var(--brand-500);
+  background-color: var(--bg-primary);
+  box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.12);
+  outline: none;
+}
+
+.metas-input-goal.filled {
+  border-color: var(--brand-500);
+  background-color: rgba(6, 182, 212, 0.03);
+}
+
+.metas-input-goal:hover {
+  border-color: var(--brand-400);
+}
+
+/* Row highlight when goal is set */
+.row-defined {
+  background-color: rgba(6, 182, 212, 0.012) !important;
+}
+
+.row-defined:hover {
+  background-color: rgba(6, 182, 212, 0.04) !important;
+}
+
+.row-defined td:first-child {
+  position: relative;
+}
+
+.row-defined td:first-child::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--brand-500);
+  border-radius: 0 4px 4px 0;
+}
+
+/* Grid Animations */
+.animate-row {
+  animation: slideInRow 0.25s ease forwards;
+}
+
+@keyframes slideInRow {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dark .metas-input-goal.filled {
+  background-color: rgba(6, 182, 212, 0.06);
+}
+
