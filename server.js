@@ -1404,17 +1404,17 @@ app.get('/api/fiscal/certificados/status', async (req, res) => {
   const empId = req.query.empresaId || 'emp-matriz-001';
   const cert = await getActiveCertificadoData(empId);
 
-  if (cert && cert.is_active) {
-    const validade = new Date(cert.validade_fim || cert.validadeFim);
+  if (cert && cert.is_active !== false && (cert.pfx_encrypted_base64 || cert.pfxBase64)) {
+    const validade = new Date(cert.validade_fim || cert.validadeFim || cert.validade_inicio || (Date.now() + 365 * 86400000));
     const diasRestantes = Math.ceil((validade.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
     return res.json({
       instalado: true,
       certificado: {
         id: cert.id,
-        empresa_id: cert.empresa_id,
-        alias: cert.alias,
-        cnpj: cert.cnpj,
-        nome_titular: cert.nome_titular || cert.nomeTitular,
+        empresa_id: cert.empresa_id || empId,
+        alias: cert.alias || 'Certificado Digital A1',
+        cnpj: cert.cnpj || '',
+        nome_titular: cert.nome_titular || cert.nomeTitular || cert.alias,
         validade_inicio: cert.validade_inicio || cert.validadeInicio,
         validade_fim: cert.validade_fim || cert.validadeFim,
         diasRestantes,

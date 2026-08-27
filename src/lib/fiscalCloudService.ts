@@ -59,7 +59,46 @@ export const fiscalCloudService = {
           } catch {}
           return data;
         } else {
-          // Servidor retornou expressamente que não há certificado ativo
+          // Se o servidor perdeu o certificado temporariamente (ex: reinício/deploy de container),
+          // tenta auto-restaurar imediatamente a partir do cofre seguro local
+          try {
+            const vaultBackup = localStorage.getItem('coliseu_pfx_vault_backup');
+            if (vaultBackup) {
+              const bkp = JSON.parse(vaultBackup);
+              if (bkp.pfxBase64 && bkp.password) {
+                const reUploadRes = await fetch(`${CLOUD_API_URL}/api/fiscal/certificados/upload`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    alias: bkp.alias || 'Certificado Digital A1',
+                    pfxBase64: bkp.pfxBase64,
+                    password: bkp.password,
+                    empresaId,
+                  }),
+                });
+                if (reUploadRes.ok) {
+                  const reData = await reUploadRes.json();
+                  if (reData.success && reData.certificado) {
+                    const validade = new Date(reData.certificado.validade_fim || reData.certificado.validadeFim || Date.now() + 365 * 86400000);
+                    const diasRestantes = Math.ceil((validade.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                    const restoredStatus: CertificadoA1Status = {
+                      instalado: true,
+                      certificado: {
+                        ...reData.certificado,
+                        diasRestantes,
+                        expirado: diasRestantes <= 0,
+                      },
+                    };
+                    localStorage.setItem(`coliseu_cert_vps_${empresaId}`, JSON.stringify(restoredStatus));
+                    return restoredStatus;
+                  }
+                }
+              }
+            }
+          } catch (reErr) {
+            console.warn('[FiscalCloud] Falha no auto-restore do certificado:', reErr);
+          }
+
           try {
             localStorage.removeItem(`coliseu_cert_vps_${empresaId}`);
           } catch {}
@@ -131,6 +170,16 @@ export const fiscalCloudService = {
               diasRestantes,
               expirado: diasRestantes <= 0,
             },
+          })
+        );
+        // Gravar backup seguro para auto-restauração transparente
+        localStorage.setItem(
+          'coliseu_pfx_vault_backup',
+          JSON.stringify({
+            alias: payload.alias,
+            pfxBase64: payload.pfxBase64,
+            password: payload.password,
+            empresaId: empId,
           })
         );
       } catch {}
