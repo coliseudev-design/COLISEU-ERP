@@ -67,7 +67,7 @@ export default function AIInsightsDashboard() {
             Coliseu AI Assistant
           </h2>
           <p className="text-text-secondary max-w-2xl">
-            Analisamos milhões de pontos de dados do seu faturamento, estoque e comportamento de clientes no período de <span className="font-semibold text-text-primary">{filter.periodoLabel}</span> para trazer recomendações acionáveis.
+            Analisamos milhões de pontos de dados do seu faturamento, estoque e comportamento de clientes no período de <span className="font-semibold text-text-primary">{filter?.periodoLabel || 'Período Selecionado'}</span> para trazer recomendações acionáveis.
           </p>
         </div>
         <div className="relative z-10 flex-shrink-0">

@@ -97,8 +97,8 @@ export default function SupplierAnalyticsDashboard() {
     if (stockSearch) {
       const q = stockSearch.toLowerCase();
       result = result.filter(item => 
-        item.desc.toLowerCase().includes(q) || 
-        item.cod.toLowerCase().includes(q)
+        String(item.desc || '').toLowerCase().includes(q) || 
+        String(item.cod || '').toLowerCase().includes(q)
       );
     }
     if (stockSort === 'alto') {

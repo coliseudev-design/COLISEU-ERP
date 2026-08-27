@@ -118,8 +118,8 @@ export default function CustomerAnalyticsDashboard() {
                 className="appearance-none h-10 px-4 bg-bg-secondary border border-divider text-text-primary rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all duration-300 w-full cursor-pointer pr-10 shadow-sm"
               >
                 <option value="todas">Todos os Vendedores</option>
-                {sellersQuery.data?.data?.map((v: any) => (
-                  <option key={v.id} value={v.id}>{v.nome}</option>
+                {(Array.isArray(sellersQuery.data) ? sellersQuery.data : sellersQuery.data?.data || []).map((v: any) => (
+                  <option key={v.id || v.vendedor_id} value={v.id || v.vendedor_id}>{v.nome || v.nome_vendedor}</option>
                 ))}
               </select>
               <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" />
@@ -139,7 +139,7 @@ export default function CustomerAnalyticsDashboard() {
                 className="appearance-none h-10 px-4 bg-bg-secondary border border-divider text-text-primary rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all duration-300 w-full cursor-pointer pr-10 shadow-sm uppercase"
               >
                 <option value="todas">Todas as Cidades</option>
-                {citiesQuery.data?.data?.map((c: any) => (
+                {(Array.isArray(citiesQuery.data) ? citiesQuery.data : citiesQuery.data?.data || []).map((c: any) => (
                   <option key={c.nome || c.cidade} value={c.nome || c.cidade}>{c.nome || c.cidade}</option>
                 ))}
               </select>

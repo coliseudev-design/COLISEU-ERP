@@ -54,8 +54,16 @@ export default function GoalsPerformanceDashboard() {
     ]
   };
 
-  const goals = data || mockGoals;
-  const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+  // Fallback seguro para meta geral
+  const metaGeral = data?.meta_geral || mockGoals.meta_geral;
+  const metasPorVendedor = (data?.metas_por_vendedor && data.metas_por_vendedor.length > 0) ? data.metas_por_vendedor : mockGoals.metas_por_vendedor;
+  const metasPorMarca = (data?.metas_por_marca && data.metas_por_marca.length > 0) ? data.metas_por_marca : mockGoals.metas_por_marca;
+  const metasPorGrupo = (data?.metas_por_grupo && data.metas_por_grupo.length > 0) ? data.metas_por_grupo : mockGoals.metas_por_grupo;
+
+  const formatCurrency = (val?: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
+
+  const atingimentoPct = metaGeral?.atingimento_pct || 0;
+  const projecaoAtingimentoPct = metaGeral?.projecao_atingimento_pct || 0;
 
   return (
     <div className="space-y-4 animate-in fade-in duration-300">
@@ -63,30 +71,30 @@ export default function GoalsPerformanceDashboard() {
       {/* Overview Metas Gerais */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Meta Principal */}
-        <div className="md:col-span-2 bg-bg-primary border border-border-primary rounded-xl p-6 shadow-sm flex flex-col justify-center">
+        <div className="md:col-span-2 bg-bg-primary border border-border rounded-xl p-6 shadow-sm flex flex-col justify-center">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-text-primary flex items-center">
               <Target size={20} className="text-brand-500 mr-2" /> Meta Global
             </h3>
-            <span className="text-sm font-medium text-text-secondary">{goals.meta_geral.dias_restantes} dias restantes</span>
+            <span className="text-sm font-medium text-text-secondary">{metaGeral?.dias_restantes || 0} dias restantes</span>
           </div>
           
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div>
               <div className="text-xs text-text-secondary uppercase">Objetivo</div>
-              <div className="text-xl font-bold text-text-primary">{formatCurrency(goals.meta_geral.meta_total)}</div>
+              <div className="text-xl font-bold text-text-primary">{formatCurrency(metaGeral?.meta_total)}</div>
             </div>
             <div>
               <div className="text-xs text-text-secondary uppercase">Realizado</div>
-              <div className="text-xl font-bold text-brand-500">{formatCurrency(goals.meta_geral.realizado)}</div>
+              <div className="text-xl font-bold text-brand-500">{formatCurrency(metaGeral?.realizado)}</div>
             </div>
             <div>
               <div className="text-xs text-text-secondary uppercase">Falta</div>
-              <div className="text-xl font-bold text-red-500">{formatCurrency(Math.abs(goals.meta_geral.diferenca))}</div>
+              <div className="text-xl font-bold text-red-500">{formatCurrency(Math.abs(metaGeral?.diferenca || 0))}</div>
             </div>
             <div>
               <div className="text-xs text-text-secondary uppercase">Projeção</div>
-              <div className="text-xl font-bold text-text-primary">{formatCurrency(goals.meta_geral.projecao)}</div>
+              <div className="text-xl font-bold text-text-primary">{formatCurrency(metaGeral?.projecao)}</div>
             </div>
           </div>
 
@@ -94,12 +102,12 @@ export default function GoalsPerformanceDashboard() {
             <div className="flex mb-2 items-center justify-between">
               <div>
                 <span className="text-xs font-semibold inline-block py-1 uppercase rounded-full text-brand-500 bg-brand-500/10 px-2">
-                  Atingimento: {goals.meta_geral.atingimento_pct}%
+                  Atingimento: {atingimentoPct}%
                 </span>
               </div>
               <div className="text-right">
                 <span className="text-xs font-semibold inline-block text-text-secondary">
-                  Proj: {goals.meta_geral.projecao_atingimento_pct}%
+                  Proj: {projecaoAtingimentoPct}%
                 </span>
               </div>
             </div>
@@ -107,15 +115,15 @@ export default function GoalsPerformanceDashboard() {
               {/* Projeção Marker */}
               <div 
                 className="absolute top-0 bottom-0 border-l-2 border-dashed border-text-secondary z-10"
-                style={{ left: `${Math.min(100, goals.meta_geral.projecao_atingimento_pct)}%` }}
-                title={`Projeção: ${goals.meta_geral.projecao_atingimento_pct}%`}
+                style={{ left: `${Math.min(100, projecaoAtingimentoPct)}%` }}
+                title={`Projeção: ${projecaoAtingimentoPct}%`}
               ></div>
               
               <div 
-                style={{ width: `${Math.min(100, goals.meta_geral.atingimento_pct)}%` }} 
+                style={{ width: `${Math.min(100, atingimentoPct)}%` }} 
                 className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center ${
-                  goals.meta_geral.atingimento_pct >= 100 ? 'bg-green-500' : 
-                  goals.meta_geral.atingimento_pct >= 80 ? 'bg-brand-500' : 'bg-yellow-500'
+                  atingimentoPct >= 100 ? 'bg-green-500' : 
+                  atingimentoPct >= 80 ? 'bg-brand-500' : 'bg-yellow-500'
                 }`}
               ></div>
             </div>
@@ -123,22 +131,22 @@ export default function GoalsPerformanceDashboard() {
         </div>
 
         {/* Informações Diárias */}
-        <div className="bg-bg-primary border border-border-primary rounded-xl p-6 shadow-sm flex flex-col justify-center space-y-4">
-          <h3 className="text-base font-semibold text-text-primary border-b border-border-primary pb-2">Ritmo de Vendas</h3>
+        <div className="bg-bg-primary border border-border rounded-xl p-6 shadow-sm flex flex-col justify-center space-y-4">
+          <h3 className="text-base font-semibold text-text-primary border-b border-border pb-2">Ritmo de Vendas</h3>
           
           <div className="flex justify-between items-center">
             <span className="text-sm text-text-secondary">Meta Diária</span>
-            <span className="text-sm font-bold text-text-primary">{formatCurrency(goals.meta_geral.meta_diaria)}</span>
+            <span className="text-sm font-bold text-text-primary">{formatCurrency(metaGeral?.meta_diaria)}</span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-sm text-text-secondary">Média Diária Realizada</span>
-            <span className={`text-sm font-bold ${goals.meta_geral.media_diaria >= goals.meta_geral.meta_diaria ? 'text-green-500' : 'text-yellow-500'}`}>
-              {formatCurrency(goals.meta_geral.media_diaria)}
+            <span className={`text-sm font-bold ${(metaGeral?.media_diaria || 0) >= (metaGeral?.meta_diaria || 0) ? 'text-green-500' : 'text-yellow-500'}`}>
+              {formatCurrency(metaGeral?.media_diaria)}
             </span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-sm text-text-secondary">Dias Úteis Totais</span>
-            <span className="text-sm font-bold text-text-primary">{goals.meta_geral.dias_uteis}</span>
+            <span className="text-sm font-bold text-text-primary">{metaGeral?.dias_uteis || 0}</span>
           </div>
         </div>
       </div>
@@ -146,23 +154,23 @@ export default function GoalsPerformanceDashboard() {
       {/* Grid de Metas Secundárias */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Vendedores */}
-        <div className="bg-bg-primary border border-border-primary rounded-xl shadow-sm flex flex-col max-h-[400px]">
-          <div className="p-4 border-b border-border-primary">
+        <div className="bg-bg-primary border border-border rounded-xl shadow-sm flex flex-col max-h-[400px]">
+          <div className="p-4 border-b border-border">
             <h3 className="text-base font-semibold text-text-primary">Metas por Vendedor</h3>
           </div>
           <div className="overflow-y-auto p-4 space-y-4">
-            {goals.metas_por_vendedor.map(v => (
-              <div key={v.vendedor_id} className="border border-border-primary rounded-lg p-3 bg-bg-secondary/20">
+            {metasPorVendedor.map((v: any) => (
+              <div key={v.vendedor_id} className="border border-border rounded-lg p-3 bg-bg-secondary/20">
                 <div className="flex justify-between items-center mb-2">
                   <span className="font-medium text-text-primary">{v.nome}</span>
                   <StatusBadge status={v.status} />
                 </div>
                 <div className="flex justify-between text-xs text-text-secondary mb-1">
                   <span>{formatCurrency(v.realizado)} / {formatCurrency((v as any).meta || (v as any).meta_total || 0)}</span>
-                  <span className="font-bold text-text-primary">{v.atingimento_pct}%</span>
+                  <span className="font-bold text-text-primary">{v.atingimento_pct || 0}%</span>
                 </div>
                 <div className="w-full bg-bg-secondary rounded-full h-1.5">
-                  <div className={`h-1.5 rounded-full ${v.atingimento_pct >= 100 ? 'bg-green-500' : 'bg-brand-500'}`} style={{ width: `${Math.min(100, v.atingimento_pct)}%` }}></div>
+                  <div className={`h-1.5 rounded-full ${(v.atingimento_pct || 0) >= 100 ? 'bg-green-500' : 'bg-brand-500'}`} style={{ width: `${Math.min(100, v.atingimento_pct || 0)}%` }}></div>
                 </div>
               </div>
             ))}
@@ -170,23 +178,23 @@ export default function GoalsPerformanceDashboard() {
         </div>
 
         {/* Marcas */}
-        <div className="bg-bg-primary border border-border-primary rounded-xl shadow-sm flex flex-col max-h-[400px]">
-          <div className="p-4 border-b border-border-primary">
+        <div className="bg-bg-primary border border-border rounded-xl shadow-sm flex flex-col max-h-[400px]">
+          <div className="p-4 border-b border-border">
             <h3 className="text-base font-semibold text-text-primary">Metas por Marca</h3>
           </div>
           <div className="overflow-y-auto p-4 space-y-4">
-            {goals.metas_por_marca.map((m, i) => (
-              <div key={i} className="border border-border-primary rounded-lg p-3 bg-bg-secondary/20">
+            {metasPorMarca.map((m: any, i: number) => (
+              <div key={i} className="border border-border rounded-lg p-3 bg-bg-secondary/20">
                 <div className="flex justify-between items-center mb-2">
                   <span className="font-medium text-text-primary">{m.marca}</span>
                   <StatusBadge status={m.status} />
                 </div>
                 <div className="flex justify-between text-xs text-text-secondary mb-1">
                   <span>{formatCurrency(m.realizado)} / {formatCurrency((m as any).meta || (m as any).meta_total || 0)}</span>
-                  <span className="font-bold text-text-primary">{m.atingimento_pct}%</span>
+                  <span className="font-bold text-text-primary">{m.atingimento_pct || 0}%</span>
                 </div>
                 <div className="w-full bg-bg-secondary rounded-full h-1.5">
-                  <div className={`h-1.5 rounded-full ${m.atingimento_pct >= 100 ? 'bg-green-500' : 'bg-brand-500'}`} style={{ width: `${Math.min(100, m.atingimento_pct)}%` }}></div>
+                  <div className={`h-1.5 rounded-full ${(m.atingimento_pct || 0) >= 100 ? 'bg-green-500' : 'bg-brand-500'}`} style={{ width: `${Math.min(100, m.atingimento_pct || 0)}%` }}></div>
                 </div>
               </div>
             ))}

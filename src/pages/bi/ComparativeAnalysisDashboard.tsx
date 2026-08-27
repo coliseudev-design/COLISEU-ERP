@@ -47,11 +47,11 @@ export default function ProfitabilityDashboard() {
   const activeFilter = useMemo<BiPeriodFilter>(() => ({
     period: 'custom',
     ...buildDateRange(month, year, selectedPeriodTab === 'ACUMULADO'),
-    depto_id: globalFilter.depto_id,
-    centro_custo: globalFilter.centro_custo,
+    depto_id: globalFilter?.depto_id,
+    centro_custo: globalFilter?.centro_custo,
     vendedor_id: selectedVendedor,
     cidade: selectedCidade
-  }), [month, year, selectedPeriodTab, globalFilter.depto_id, globalFilter.centro_custo, selectedVendedor, selectedCidade]);
+  }), [month, year, selectedPeriodTab, globalFilter?.depto_id, globalFilter?.centro_custo, selectedVendedor, selectedCidade]);
 
   const { data, isLoading, refetch } = useBiPeriodQuery(
     ['bi', 'comparative', activeFilter],

@@ -91,10 +91,11 @@ export default function SellerHubDashboard() {
 
   // Set default seller when list loaded
   useEffect(() => {
+    const list = Array.isArray(vdFull.data) ? vdFull.data : vdFull.data?.data || [];
     if (sellerId) {
       setSelectedVendedor(sellerId);
-    } else if (vdFull.data?.data && vdFull.data.data.length > 0 && !selectedVendedor) {
-      setSelectedVendedor(String(vdFull.data.data[0].id));
+    } else if (list.length > 0 && !selectedVendedor) {
+      setSelectedVendedor(String(list[0].id || list[0].vendedor_id));
     }
   }, [vdFull.data, selectedVendedor, sellerId]);
 
@@ -106,9 +107,10 @@ export default function SellerHubDashboard() {
   }), [globalFilter, selectedVendedor, selectedCidade, selectedMarca]);
 
   const selectedSellerName = useMemo(() => {
-    if (!selectedVendedor || !vdFull.data?.data) return '';
-    const seller = vdFull.data.data.find((v: any) => String(v.id) === String(selectedVendedor));
-    return seller ? seller.nome : '';
+    const list = Array.isArray(vdFull.data) ? vdFull.data : vdFull.data?.data || [];
+    if (!selectedVendedor || list.length === 0) return '';
+    const seller = list.find((v: any) => String(v.id || v.vendedor_id) === String(selectedVendedor));
+    return seller ? (seller.nome || seller.nome_vendedor || '') : '';
   }, [selectedVendedor, vdFull.data]);
 
   const { data, isLoading, isError } = useBiPeriodQuery<any>(
@@ -300,8 +302,8 @@ export default function SellerHubDashboard() {
                   className="appearance-none h-9 px-3 bg-bg-secondary border border-divider text-text-primary rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all duration-300 w-full cursor-pointer pr-10 shadow-sm"
                 >
                   <option value="">Selecione um vendedor...</option>
-                  {vdFull.data?.data?.map((v: any) => (
-                    <option key={v.id} value={v.id}>{v.nome}</option>
+                  {(Array.isArray(vdFull.data) ? vdFull.data : vdFull.data?.data || []).map((v: any) => (
+                    <option key={v.id || v.vendedor_id} value={v.id || v.vendedor_id}>{v.nome || v.nome_vendedor}</option>
                   ))}
                 </select>
                 <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" />
@@ -318,7 +320,7 @@ export default function SellerHubDashboard() {
                   className="appearance-none h-9 px-3 bg-bg-secondary border border-divider text-text-primary rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all duration-300 w-full cursor-pointer pr-10 shadow-sm uppercase"
                 >
                   <option value="todas">Todas as Cidades</option>
-                  {cidadesDropdown.data?.data?.map((c: any) => (
+                  {(Array.isArray(cidadesDropdown.data) ? cidadesDropdown.data : cidadesDropdown.data?.data || []).map((c: any) => (
                     <option key={c.nome || c.cidade} value={c.nome || c.cidade}>{c.nome || c.cidade}</option>
                   ))}
                 </select>
@@ -336,7 +338,7 @@ export default function SellerHubDashboard() {
                   className="appearance-none h-9 px-3 bg-bg-secondary border border-divider text-text-primary rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all duration-300 w-full cursor-pointer pr-10 shadow-sm uppercase"
                 >
                   <option value="todas">Todas as Marcas</option>
-                  {marcasDropdown.data?.data?.map((m: any) => (
+                  {(Array.isArray(marcasDropdown.data) ? marcasDropdown.data : marcasDropdown.data?.data || []).map((m: any) => (
                     <option key={m.nome || m.marca} value={m.nome || m.marca}>{m.nome || m.marca}</option>
                   ))}
                 </select>
