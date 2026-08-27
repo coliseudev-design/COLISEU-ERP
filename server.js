@@ -1577,37 +1577,63 @@ app.post('/api/fiscal/emitir', async (req, res) => {
     // 5. Assinatura Digital XMLDSIG A1 e Transmissão Real SEFAZ (Se certificado estiver ativo)
     const certData = await getActiveCertificadoData(empresaId);
     let transmissaoReal = null;
-    let xmlFinal = xmlTexto;
+    if (!certData || !certData.pfx_encrypted_base64 || !certData.password_encrypted) {
+      return res.status(400).json({
+        sucesso: false,
+        autorizado: false,
+        error: 'Nenhum Certificado Digital A1 ativo encontrado no cofre da VPS para assinar o documento fiscal. Envie o certificado (.pfx) em Gerenciamento NF-e antes de emitir.',
+      });
+    }
 
-    if (certData && certData.pfx_encrypted_base64 && certData.password_encrypted) {
+    const pfxBase64 = decryptText(certData.pfx_encrypted_base64);
+    const password = decryptText(certData.password_encrypted);
+    const pfxBuffer = Buffer.from(pfxBase64, 'base64');
+
+    // 1. Assinatura Digital XMLDSIG (RSA-SHA1 + X.509)
+    const tagName = modStr === '57' ? 'infCte' : modStr === '58' ? 'infMDFe' : 'infNFe';
+    let assinatura;
+    try {
+      assinatura = assinarXmlNFe(xmlTexto, pfxBuffer, password, tagName);
+      xmlFinal = assinatura.xmlAssinado;
+    } catch (signErr) {
+      return res.status(400).json({
+        sucesso: false,
+        autorizado: false,
+        error: `Falha na assinatura digital do XML: ${signErr.message}`,
+      });
+    }
+
+    // 2. Transmissão para o WebService SEFAZ (Modelo 55 ou 65)
+    let transmissaoReal = null;
+    if (modStr === '55' || modStr === '65') {
       try {
-        const pfxBase64 = decryptText(certData.pfx_encrypted_base64);
-        const password = decryptText(certData.password_encrypted);
-        const pfxBuffer = Buffer.from(pfxBase64, 'base64');
-
-        // Assinatura XMLDSIG
-        const tagName = modStr === '57' ? 'infCte' : modStr === '58' ? 'infMDFe' : 'infNFe';
-        const assinatura = assinarXmlNFe(xmlTexto, pfxBuffer, password, tagName);
-        xmlFinal = assinatura.xmlAssinado;
-
-        // Transmissão para o WebService SEFAZ (Modelo 55 ou 65)
-        if (modStr === '55' || modStr === '65') {
-          transmissaoReal = await transmitirLoteNFeSefaz({
-            xmlAssinado: xmlFinal,
-            uf: emp.uf || '50',
-            ambiente,
-            pfxBuffer,
-            password,
-          });
-
-          if (transmissaoReal.autorizado) {
-            protocoloAutorizacao = transmissaoReal.protocolo || protocoloAutorizacao;
-            if (transmissaoReal.xmlProc) xmlFinal = transmissaoReal.xmlProc;
-          }
-        }
-      } catch (signErr) {
-        console.warn('[Fiscal] Aviso ao assinar/transmitir via SEFAZ:', signErr.message);
+        transmissaoReal = await transmitirLoteNFeSefaz({
+          xmlAssinado: xmlFinal,
+          uf: emp.uf || '50',
+          ambiente,
+          pfxBuffer,
+          password,
+        });
+      } catch (wsErr) {
+        return res.status(400).json({
+          sucesso: false,
+          autorizado: false,
+          error: `Erro de comunicação com WebService SEFAZ: ${wsErr.message}`,
+        });
       }
+
+      if (!transmissaoReal || !transmissaoReal.autorizado) {
+        return res.status(400).json({
+          sucesso: false,
+          autorizado: false,
+          cStat: transmissaoReal?.cStat || '0',
+          error: `SEFAZ Rejeição [cStat ${transmissaoReal?.cStat || 'ERRO'}]: ${transmissaoReal?.xMotivo || 'Nota não autorizada pelo fisco.'}`,
+          sefazRetorno: transmissaoReal,
+        });
+      }
+
+      protocoloAutorizacao = transmissaoReal.protocolo || protocoloAutorizacao;
+      if (transmissaoReal.xmlProc) xmlFinal = transmissaoReal.xmlProc;
     }
 
     // 6. Grava arquivo físico no Concentrador Único de XMLs

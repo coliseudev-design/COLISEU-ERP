@@ -142,7 +142,7 @@ export const ModalFaturamentoNFe: React.FC<ModalFaturamentoNFeProps> = ({
         chFinal = cloudRes.chaveAcesso;
         protFinal = cloudRes.protocolo;
         incrementarNumeroNFe(numSequencial);
-      } catch (cloudErr) {
+      } catch (cloudErr: any) {
         console.warn('[NFe Cloud] Usando fallback local:', cloudErr);
         if (configNfe.modoOperacao === 'TECNOSPEED') {
           const itensTs = (pedido.itens || []).map((item, idx) => ({
@@ -224,8 +224,7 @@ export const ModalFaturamentoNFe: React.FC<ModalFaturamentoNFeProps> = ({
           chFinal = resTs?.ch_nfe || chaveObj.chave;
           protFinal = resTs?.n_prot || protFinal;
         } else {
-          incrementarNumeroNFe(numSequencial);
-          chFinal = chaveObj.chave;
+          throw new Error(cloudErr.message || 'Falha na transmissão da NF-e para a SEFAZ.');
         }
       }
 
