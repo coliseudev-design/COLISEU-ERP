@@ -452,6 +452,126 @@ export const ConfiguracoesPage: React.FC = () => {
               </div>
             </div>
 
+            {/* PAINEL: IDENTIDADE & SERVIDOR DE LICENÇAS (COLISEU IDENTITY) */}
+            <div style={{
+              border: '1px solid var(--border-subtle)',
+              borderRadius: '10px',
+              padding: '16px',
+              backgroundColor: 'var(--surface-1)',
+              marginBottom: '16px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <ShieldCheck size={18} style={{ color: 'var(--action-primary)' }} />
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    Servidor Central de Licenças & Identidade (Coliseu.Identity)
+                  </span>
+                </div>
+                <a 
+                  href="https://adminlicencas.coliseusistemas.com.br" 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="coliseu-btn coliseu-btn-secondary"
+                  style={{ fontSize: '11px', padding: '4px 10px', height: '28px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <span>Painel Admin Licenças</span>
+                  <ExternalLink size={12} />
+                </a>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '12px', fontSize: '11px', marginBottom: '12px' }}>
+                <div>
+                  <label className="coliseu-label" style={{ fontSize: '10px' }}>Chave Identificadora da Empresa (Tenant UUID)</label>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <input 
+                      type="text" 
+                      readOnly 
+                      value="1e40d65f-4319-4c68-ae13-66223820c095" 
+                      className="coliseu-input text-mono" 
+                      style={{ fontSize: '11px', backgroundColor: 'var(--surface-2)' }} 
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText('1e40d65f-4319-4c68-ae13-66223820c095');
+                        showToast('Chave da Empresa copiada!');
+                      }}
+                      className="coliseu-btn coliseu-btn-secondary"
+                      style={{ padding: '0 8px', fontSize: '11px' }}
+                    >
+                      Copiar
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="coliseu-label" style={{ fontSize: '10px' }}>URL Identity Server</label>
+                  <input 
+                    type="text" 
+                    readOnly 
+                    value="https://adminlicencas.coliseusistemas.com.br" 
+                    className="coliseu-input text-mono" 
+                    style={{ fontSize: '11px', backgroundColor: 'var(--surface-2)' }} 
+                  />
+                </div>
+                <div>
+                  <label className="coliseu-label" style={{ fontSize: '10px' }}>Chave de API do Coliseu Dash / ERP</label>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <input 
+                      type="text" 
+                      readOnly 
+                      value="COL-YUZA-9WSK-TN88" 
+                      className="coliseu-input text-mono" 
+                      style={{ fontSize: '11px', backgroundColor: 'var(--surface-2)', fontWeight: 600 }} 
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText('COL-YUZA-9WSK-TN88');
+                        showToast('Chave de API do Coliseu Dash copiada!');
+                      }}
+                      className="coliseu-btn coliseu-btn-secondary"
+                      style={{ padding: '0 8px', fontSize: '11px' }}
+                    >
+                      Copiar
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* TABELA DE MÓDULOS HABILITADOS NO ECOSSISTEMA */}
+              <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '10px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
+                  Módulos Habilitados para Sincronização via Worker:
+                </span>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
+                  <div style={{ padding: '6px 10px', borderRadius: '6px', backgroundColor: 'var(--surface-2)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>📊 Coliseu Dash (BI)</span>
+                    <span style={{ fontSize: '9px', fontWeight: 700, color: '#10b981', backgroundColor: '#10b98120', padding: '1px 5px', borderRadius: '4px' }}>ATIVO</span>
+                  </div>
+                  <div style={{ padding: '6px 10px', borderRadius: '6px', backgroundColor: 'var(--surface-2)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>📱 Força de Vendas (Sales)</span>
+                    <span style={{ fontSize: '9px', fontWeight: 700, color: '#10b981', backgroundColor: '#10b98120', padding: '1px 5px', borderRadius: '4px' }}>ATIVO</span>
+                  </div>
+                  <div style={{ padding: '6px 10px', borderRadius: '6px', backgroundColor: 'var(--surface-2)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>💬 SAC Digital (AI)</span>
+                    <span style={{ fontSize: '9px', fontWeight: 700, color: '#10b981', backgroundColor: '#10b98120', padding: '1px 5px', borderRadius: '4px' }}>ATIVO</span>
+                  </div>
+                  <div style={{ padding: '6px 10px', borderRadius: '6px', backgroundColor: 'var(--surface-2)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>🔧 AutoCenter</span>
+                    <span style={{ fontSize: '9px', fontWeight: 700, color: '#10b981', backgroundColor: '#10b98120', padding: '1px 5px', borderRadius: '4px' }}>ATIVO</span>
+                  </div>
+                  <div style={{ padding: '6px 10px', borderRadius: '6px', backgroundColor: 'var(--surface-2)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>🌐 Nexus Hub</span>
+                    <span style={{ fontSize: '9px', fontWeight: 700, color: '#10b981', backgroundColor: '#10b98120', padding: '1px 5px', borderRadius: '4px' }}>ATIVO</span>
+                  </div>
+                  <div style={{ padding: '6px 10px', borderRadius: '6px', backgroundColor: 'var(--surface-2)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>🛡️ Controle Garantias</span>
+                    <span style={{ fontSize: '9px', fontWeight: 700, color: '#10b981', backgroundColor: '#10b98120', padding: '1px 5px', borderRadius: '4px' }}>ATIVO</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* PAINEL DE DIAGNÓSTICO DO WORKER */}
             <div style={{
               border: '1px solid var(--border-subtle)',
@@ -462,7 +582,9 @@ export const ConfiguracoesPage: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <Activity size={18} style={{ color: modoOperacao === 'firebird_worker' ? '#10b981' : 'var(--text-muted)' }} />
-                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>Status do Serviço Windows (ColiseuSpeed.Worker)</span>
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    Status da Sincronização Local (Coliseu Sales — Worker Configurator v2.5.143)
+                  </span>
                 </div>
                 <button 
                   type="button"
@@ -499,7 +621,7 @@ export const ConfiguracoesPage: React.FC = () => {
                       workerStatus.map((row: any, i: number) => (
                         <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                           <td style={{ padding: '6px 8px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                            {row.tabela === '__heartbeat__' ? '📡 Heartbeat Conexão Firebird (3050)' : row.tabela}
+                            {row.tabela === '__heartbeat__' ? '📡 Heartbeat Conexão Firebird (Porta 3050)' : row.tabela}
                           </td>
                           <td style={{ padding: '6px 8px', color: 'var(--text-secondary)' }}>
                             {row.ultima ? new Date(row.ultima).toLocaleString() : 'Pendente'}
@@ -524,7 +646,7 @@ export const ConfiguracoesPage: React.FC = () => {
                     ) : (
                       <tr>
                         <td colSpan={4} style={{ padding: '12px 8px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                          Nenhum registro de sincronização recebido ainda. Inicie o serviço <strong>ColiseuSpeed.Worker</strong> no servidor local.
+                          Nenhum registro de sincronização recebido ainda. Inicie o serviço <strong>ColiseuSales.Worker</strong> no servidor local.
                         </td>
                       </tr>
                     )}
@@ -542,11 +664,13 @@ export const ConfiguracoesPage: React.FC = () => {
                 lineHeight: 1.6
               }}>
                 <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
-                  ⚙️ Configuração do Serviço Windows (appsettings.json):
+                  ⚙️ Como Conectar no Worker Configurator (v2.5.143):
                 </div>
-                <div>• Caminho do Banco no Servidor: <code style={{ backgroundColor: 'var(--surface-1)', padding: '2px 4px', borderRadius: '3px' }}>C:\Coliseu\Data\PIVETA.FDB</code></div>
-                <div>• Porta Firebird: <code style={{ backgroundColor: 'var(--surface-1)', padding: '2px 4px', borderRadius: '3px' }}>3050</code> | Usuário: <code style={{ backgroundColor: 'var(--surface-1)', padding: '2px 4px', borderRadius: '3px' }}>SYSDBA</code></div>
-                <div>• URL do Servidor Cloud: <code style={{ backgroundColor: 'var(--surface-1)', padding: '2px 4px', borderRadius: '3px' }}>https://coliseu-erp.seu-dominio.com/api/sync</code></div>
+                <div>1. Abra o aplicativo <strong>Coliseu Sales — Worker Configurator</strong> no servidor onde o Firebird está instalado.</div>
+                <div>2. No campo <strong>Caminho do Banco</strong>, informe o arquivo do Firebird: <code style={{ backgroundColor: 'var(--surface-1)', padding: '2px 4px', borderRadius: '3px' }}>C:\Coliseu\Data\PIVETA.FDB</code> e clique em <strong>Preparar Banco</strong>.</div>
+                <div>3. No campo <strong>URL Identity</strong>, informe: <code style={{ backgroundColor: 'var(--surface-1)', padding: '2px 4px', borderRadius: '3px' }}>https://adminlicencas.coliseusistemas.com.br</code>.</div>
+                <div>4. No campo <strong>Chave</strong>, cole a Chave da Empresa: <code style={{ backgroundColor: 'var(--surface-1)', padding: '2px 4px', borderRadius: '3px' }}>1e40d65f-4319-4c68-ae13-66223820c095</code>.</div>
+                <div>5. Marque a caixa <strong>Coliseu Dash</strong> com URL: <code style={{ backgroundColor: 'var(--surface-1)', padding: '2px 4px', borderRadius: '3px' }}>https://erp.coliseusistemas.com.br</code> e Internal API Key: <code style={{ backgroundColor: 'var(--surface-1)', padding: '2px 4px', borderRadius: '3px' }}>COL-YUZA-9WSK-TN88</code>.</div>
               </div>
             </div>
           </div>
