@@ -291,22 +291,63 @@ let inMemoryTransporte = [];
 let inMemoryDocFiscais = [];
 let inMemoryCertificados = {};
 
-function loadCertificadosFromDisk() {
+async function loadCertificadosFromDisk() {
   try {
+    // 1. Tentar carregar do cofre global JSON
+    const vaultFile = path.join(FISCAL_STORAGE_DIR, 'cert_vault.json');
+    if (fs.existsSync(vaultFile)) {
+      try {
+        const vData = JSON.parse(fs.readFileSync(vaultFile, 'utf8'));
+        if (vData && vData.pfx_encrypted_base64 && vData.password_encrypted) {
+          inMemoryCertificados['emp-matriz-001'] = vData;
+          inMemoryCertificados['default'] = vData;
+          if (vData.empresa_id) inMemoryCertificados[vData.empresa_id] = vData;
+          console.log(`[Fiscal] Certificado ativo carregado do cofre global: ${vData.alias || vData.nome_titular}`);
+        }
+      } catch (ve) {
+        console.warn('[Fiscal] Erro ao ler cofre global:', ve.message);
+      }
+    }
+
+    // 2. Tentar pastas por empresa
     const certBaseDir = path.join(FISCAL_STORAGE_DIR, 'certificados');
     if (fs.existsSync(certBaseDir)) {
-      const empDirs = fs.readdirSync(certBaseDir);
-      for (const empId of empDirs) {
-        const certJsonFile = path.join(certBaseDir, empId, 'cert_active.json');
-        if (fs.existsSync(certJsonFile)) {
-          const certData = JSON.parse(fs.readFileSync(certJsonFile, 'utf8'));
-          inMemoryCertificados[empId] = certData;
-          console.log(`[Fiscal] Certificado ativo carregado do disco para empresa ${empId}: ${certData.alias || certData.nome_titular}`);
+      const empDirs = fs.readdirSync(certBaseDir, { withFileTypes: true });
+      for (const d of empDirs) {
+        if (d.isDirectory()) {
+          const certJsonFile = path.join(certBaseDir, d.name, 'cert_active.json');
+          if (fs.existsSync(certJsonFile)) {
+            const certData = JSON.parse(fs.readFileSync(certJsonFile, 'utf8'));
+            if (certData && certData.pfx_encrypted_base64 && certData.password_encrypted) {
+              inMemoryCertificados[d.name] = certData;
+              inMemoryCertificados['emp-matriz-001'] = certData;
+              inMemoryCertificados['default'] = certData;
+              console.log(`[Fiscal] Certificado ativo carregado do disco (${d.name}): ${certData.alias || certData.nome_titular}`);
+            }
+          }
         }
       }
     }
+
+    // 3. Tentar PostgreSQL Central
+    try {
+      const pgRes = await pool.query(
+        `SELECT id, empresa_id, alias, cnpj, nome_titular, validade_inicio, validade_fim,
+                pfx_encrypted_base64, password_encrypted, is_active, updated_at
+         FROM certificados_digitais
+         WHERE is_active = TRUE
+         ORDER BY updated_at DESC LIMIT 1`
+      );
+      if (pgRes.rows.length > 0) {
+        const certDb = pgRes.rows[0];
+        inMemoryCertificados['emp-matriz-001'] = certDb;
+        inMemoryCertificados['default'] = certDb;
+        if (certDb.empresa_id) inMemoryCertificados[certDb.empresa_id] = certDb;
+        console.log(`[Fiscal] Certificado ativo carregado do PostgreSQL: ${certDb.alias || certDb.nome_titular}`);
+      }
+    } catch {}
   } catch (err) {
-    console.warn('[Fiscal] Aviso ao carregar certificados do disco:', err.message);
+    console.warn('[Fiscal] Aviso ao carregar certificados:', err.message);
   }
 }
 loadCertificadosFromDisk();
@@ -1231,11 +1272,18 @@ app.post('/api/fiscal/certificados/upload', async (req, res) => {
       updated_at: new Date().toISOString(),
     };
 
+    // 1. Grava na pasta específica e no cofre global JSON
     fs.writeFileSync(path.join(certDir, 'cert_active.json'), JSON.stringify(certData, null, 2), 'utf8');
-    inMemoryCertificados[empId] = certData;
+    fs.writeFileSync(path.join(FISCAL_STORAGE_DIR, 'cert_vault.json'), JSON.stringify(certData, null, 2), 'utf8');
 
+    // 2. Grava em todas as chaves de memória
+    inMemoryCertificados[empId] = certData;
+    inMemoryCertificados['emp-matriz-001'] = certData;
+    inMemoryCertificados['default'] = certData;
+
+    // 3. Grava no PostgreSQL Central
     try {
-      await pool.query(`UPDATE certificados_digitais SET is_active = FALSE WHERE empresa_id = $1`, [empId]);
+      await pool.query(`UPDATE certificados_digitais SET is_active = FALSE WHERE empresa_id = $1 OR 1=1`, [empId]);
       await pool.query(
         `INSERT INTO certificados_digitais (
           id, empresa_id, alias, cnpj, nome_titular, validade_inicio, validade_fim,
@@ -1270,10 +1318,15 @@ app.post('/api/fiscal/certificados/upload', async (req, res) => {
 
 // Helper para obter o certificado A1 ativo com chaves encriptadas (Postgres + Memória + Disco)
 async function getActiveCertificadoData(empId = 'emp-matriz-001') {
-  // 1. Tenta memória
-  let cert = inMemoryCertificados[empId];
+  // 1. Tenta memória (qualquer chave válida)
+  let cert = inMemoryCertificados[empId] || inMemoryCertificados['emp-matriz-001'] || inMemoryCertificados['default'];
   if (cert && cert.pfx_encrypted_base64 && cert.password_encrypted) {
     return cert;
+  }
+  for (const k of Object.keys(inMemoryCertificados)) {
+    if (inMemoryCertificados[k]?.pfx_encrypted_base64 && inMemoryCertificados[k]?.password_encrypted) {
+      return inMemoryCertificados[k];
+    }
   }
 
   // 2. Tenta PostgreSQL
@@ -1282,20 +1335,35 @@ async function getActiveCertificadoData(empId = 'emp-matriz-001') {
       `SELECT id, empresa_id, alias, cnpj, nome_titular, validade_inicio, validade_fim,
               pfx_encrypted_base64, password_encrypted, is_active, updated_at
        FROM certificados_digitais
-       WHERE (empresa_id = $1 OR is_active = TRUE)
-       ORDER BY updated_at DESC LIMIT 1`,
-      [empId]
+       WHERE is_active = TRUE
+       ORDER BY updated_at DESC LIMIT 1`
     );
     if (res.rows.length > 0) {
       cert = res.rows[0];
       inMemoryCertificados[empId] = cert;
+      inMemoryCertificados['emp-matriz-001'] = cert;
+      inMemoryCertificados['default'] = cert;
       return cert;
     }
   } catch (pgErr) {
     console.warn('[Fiscal] Aviso ao buscar certificado no Postgres:', pgErr.message);
   }
 
-  // 3. Tenta Disco da VPS
+  // 3. Tenta Cofre Global em Disco
+  try {
+    const vaultFile = path.join(FISCAL_STORAGE_DIR, 'cert_vault.json');
+    if (fs.existsSync(vaultFile)) {
+      cert = JSON.parse(fs.readFileSync(vaultFile, 'utf8'));
+      if (cert && cert.pfx_encrypted_base64 && cert.password_encrypted) {
+        inMemoryCertificados[empId] = cert;
+        inMemoryCertificados['emp-matriz-001'] = cert;
+        inMemoryCertificados['default'] = cert;
+        return cert;
+      }
+    }
+  } catch {}
+
+  // 4. Tenta qualquer subpasta em disco
   try {
     const certDir = path.join(FISCAL_STORAGE_DIR, 'certificados', empId);
     const certJsonFile = path.join(certDir, 'cert_active.json');
@@ -1316,6 +1384,8 @@ async function getActiveCertificadoData(empId = 'emp-matriz-001') {
             cert = JSON.parse(fs.readFileSync(jsonP, 'utf8'));
             if (cert && cert.pfx_encrypted_base64 && cert.password_encrypted) {
               inMemoryCertificados[empId] = cert;
+              inMemoryCertificados['emp-matriz-001'] = cert;
+              inMemoryCertificados['default'] = cert;
               return cert;
             }
           }

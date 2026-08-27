@@ -58,13 +58,19 @@ export const fiscalCloudService = {
             localStorage.setItem(`coliseu_cert_vps_${empresaId}`, JSON.stringify(data));
           } catch {}
           return data;
+        } else {
+          // Servidor retornou expressamente que não há certificado ativo
+          try {
+            localStorage.removeItem(`coliseu_cert_vps_${empresaId}`);
+          } catch {}
+          return { instalado: false, message: data.message || 'Nenhum certificado A1 ativo cadastrado na VPS.' };
         }
       }
     } catch (err: any) {
       console.warn('[FiscalCloud] Falha ao consultar status do certificado na nuvem:', err);
     }
 
-    // Fallback: verificar cache persistido no cliente
+    // Fallback apenas em caso de erro de rede temporário
     try {
       const cached = localStorage.getItem(`coliseu_cert_vps_${empresaId}`);
       if (cached) {
