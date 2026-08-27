@@ -1,12 +1,16 @@
-/* ================================================================
-   COLISEU ERP — Global Styles & Reset
-   ================================================================ */
-
 /* Import Design System Tokens + Component Classes */
 @import './assets/coliseu-design-system.css';
 
 /* Google Fonts — Inter (body) + JetBrains Mono (tabular/code) */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ================================================================
+   COLISEU ERP — Global Styles & Reset
+   ================================================================ */
 
 /* ================================================================
    CSS Reset (Enterprise-grade)
@@ -200,5 +204,89 @@ img, svg {
 
   .no-print {
     display: none !important;
+  }
+}
+
+/* ================================================================
+   COLISEU BI & DASHBOARD THEME TOKENS
+   ================================================================ */
+:root {
+  --color-bg-primary: #FFFFFF;
+  --color-bg-secondary: #F8F9FA;
+  --color-bg-tertiary: #F0F2F5;
+  --color-text-primary: #1A1A1A;
+  --color-text-secondary: #666666;
+  --color-text-muted: #9CA3AF;
+  --color-brand-50: #E6F0FA;
+  --color-brand-100: #CCE0F5;
+  --color-brand-500: #0066CC;
+  --color-brand-600: #0052A3;
+  --color-brand-700: #003D7A;
+  --color-border: #E5E7EB;
+  --color-divider: rgba(229, 231, 235, 0.5);
+  --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 8px -1px rgba(0, 0, 0, 0.02);
+  --shadow-card-hover: 0 12px 32px -4px rgba(0, 0, 0, 0.1), 0 4px 12px -2px rgba(0, 0, 0, 0.04);
+  --border-radius-base: 1rem;
+}
+
+.dark {
+  --color-bg-primary: #1E293B;
+  --color-bg-secondary: #0F172A;
+  --color-bg-tertiary: #334155;
+  --color-text-primary: #F8FAFC;
+  --color-text-secondary: #94A3B8;
+  --color-text-muted: #64748B;
+  --color-brand-50: #1E3A8A;
+  --color-brand-100: #1D4ED8;
+  --color-brand-500: #3B82F6;
+  --color-brand-600: #2563EB;
+  --color-brand-700: #1D4ED8;
+  --color-border: #334155;
+  --color-divider: rgba(51, 65, 85, 0.5);
+  --shadow-card: 0 6px 20px -4px rgba(0, 0, 0, 0.4), 0 2px 6px -2px rgba(0, 0, 0, 0.3);
+  --shadow-card-hover: 0 16px 36px -6px rgba(0, 0, 0, 0.6), 0 6px 12px -3px rgba(0, 0, 0, 0.4);
+  --border-radius-base: 1rem;
+}
+
+@layer components {
+  .card {
+    @apply bg-bg-primary backdrop-blur-md border border-divider shadow-card p-3 sm:p-4 md:p-5 transition-all duration-300 relative overflow-hidden;
+    border-radius: var(--border-radius-base, 0.75rem);
+  }
+  .card:hover {
+    @apply shadow-card-hover -translate-y-0.5 border-border;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg font-medium text-sm transition-all duration-300 cursor-pointer;
+  }
+  .btn-primary {
+    @apply btn bg-brand-500 text-white hover:bg-brand-600 active:bg-brand-700 disabled:opacity-60;
+  }
+  .btn-secondary {
+    @apply btn bg-bg-primary border border-border text-text-primary hover:bg-bg-secondary active:bg-bg-tertiary;
+  }
+  .btn-ghost {
+    @apply btn text-text-secondary hover:bg-bg-tertiary hover:text-text-primary active:bg-bg-secondary;
+  }
+  .input {
+    @apply w-full px-3 py-2.5 text-sm rounded-lg border border-border bg-bg-primary backdrop-blur-sm
+           focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500
+           placeholder:text-text-muted transition-all duration-300 text-text-primary;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-[12px] sm:text-xs font-medium whitespace-nowrap;
+  }
+  .badge-success { @apply badge bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400; }
+  .badge-warning { @apply badge bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400; }
+  .badge-danger  { @apply badge bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400; }
+  .badge-info    { @apply badge bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400; }
+  .badge-neutral { @apply badge bg-bg-tertiary text-text-secondary; }
+
+  .kpi-label { @apply text-[11px] sm:text-xs md:text-sm font-medium text-text-secondary uppercase tracking-wide leading-tight; }
+  .kpi-value { @apply mono text-base sm:text-xl md:text-2xl font-semibold text-text-primary leading-tight; }
+
+  .table-scroll {
+    @apply overflow-x-auto -mx-3 sm:mx-0;
+    -webkit-overflow-scrolling: touch;
   }
 }

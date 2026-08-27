@@ -102,28 +102,28 @@ export const ReportsPage: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem', marginBottom: '1.5rem' }}>
             <KPICard
               title="Faturamento Total do Período"
-              value={`R$ ${abcReport.faturamento_total_periodo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-              change={`${abcReport.total_produtos_analisados} produtos analisados`}
+              value={`R$ ${(abcReport.faturamento_total_periodo || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+              change={`${abcReport.total_produtos_analisados || 0} produtos analisados`}
               changeType="neutral"
             />
 
             <KPICard
               title="Classe A (Primeiros 80%)"
-              value={`${abcReport.total_classe_a} Itens`}
+              value={`${abcReport.total_classe_a || 0} Itens`}
               change="Alta relevância estratégica (80% receita)"
               changeType="positive"
             />
 
             <KPICard
               title="Classe B (Próximos 15%)"
-              value={`${abcReport.total_classe_b} Itens`}
+              value={`${abcReport.total_classe_b || 0} Itens`}
               change="Médio impacto financeiro (15% receita)"
               changeType="neutral"
             />
 
             <KPICard
               title="Classe C (Últimos 5%)"
-              value={`${abcReport.total_classe_c} Itens`}
+              value={`${abcReport.total_classe_c || 0} Itens`}
               change="Cauda longa de produtos (5% receita)"
               changeType="neutral"
             />
@@ -149,7 +149,7 @@ export const ReportsPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {abcReport.itens.map((item) => (
+                  {(abcReport.itens || []).map((item) => (
                     <tr key={item.produto_id}>
                       <td>
                         <Badge variant={item.classe === 'A' ? 'success' : item.classe === 'B' ? 'info' : 'default'}>
@@ -159,10 +159,10 @@ export const ReportsPage: React.FC = () => {
                       <td style={{ color: 'var(--action-primary)', fontWeight: 700 }}>{item.codigo_sku}</td>
                       <td style={{ fontFamily: 'Inter, system-ui, sans-serif', color: 'var(--text-primary)' }}>{item.descricao}</td>
                       <td className="tabular-nums" style={{ textAlign: 'right', color: 'var(--status-success)', fontWeight: 700 }}>
-                        R$ {item.faturamento_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        R$ {(item.faturamento_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>
-                      <td className="tabular-nums" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>{item.percentual_relativo.toFixed(2)}%</td>
-                      <td className="tabular-nums" style={{ textAlign: 'right', color: 'var(--text-muted)', fontWeight: 700 }}>{item.percentual_acumulado.toFixed(2)}%</td>
+                      <td className="tabular-nums" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>{(item.percentual_relativo || 0).toFixed(2)}%</td>
+                      <td className="tabular-nums" style={{ textAlign: 'right', color: 'var(--text-muted)', fontWeight: 700 }}>{(item.percentual_acumulado || 0).toFixed(2)}%</td>
                     </tr>
                   ))}
                 </tbody>

@@ -7,9 +7,33 @@ const api = axios.create({
 })
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('coliseu_token')
+  let token = localStorage.getItem('coliseu_token')
+  if (!token) {
+    try {
+      const sess = sessionStorage.getItem('coliseu_session')
+      if (sess) {
+        const parsed = JSON.parse(sess)
+        token = parsed?.token || parsed?.funcionario?.id || 'session_user'
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
+  }
+
+  try {
+    const sess = sessionStorage.getItem('coliseu_session')
+    if (sess) {
+      const parsed = JSON.parse(sess)
+      if (parsed?.filialAtiva) {
+        config.headers['X-Tenant-Id'] = parsed.filialAtiva
+      }
+    }
+  } catch {
+    // ignore
   }
   
   // Inject client's timezone offset (in minutes, sign reversed to represent offset from UTC)
@@ -31,14 +55,6 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (r) => r,
   (err: AxiosError) => {
-    if (err.response?.status === 401) {
-      // Token expirado/inválido
-      localStorage.removeItem('coliseu_token')
-      localStorage.removeItem('coliseu_user')
-      if (!window.location.pathname.startsWith('/login')) {
-        window.location.href = '/login'
-      }
-    }
     return Promise.reject(err)
   },
 )
