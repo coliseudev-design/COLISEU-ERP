@@ -1692,14 +1692,57 @@ app.post('/api/fiscal/emitir', async (req, res) => {
 
     broadcastMutation({ entity: 'documentos_fiscais', action: 'UPSERT', id: chaveAcesso, payload: docSalvo });
 
-    // 8. Se vinculado a Pedido de Venda, atualiza o status do pedido
+    // 8. Se vinculado a Pedido de Venda, atualiza o status e metadados fiscais do pedido
     if (pedidoId && statusDoc === 'AUTORIZADO') {
       try {
+        const numFormatado = `${serie}-${numNota}`;
         await pool.query(
-          `UPDATE pedidos_venda SET status = 'EM_FATURAMENTO', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
-          [pedidoId]
+          `UPDATE pedidos_venda SET 
+             status = 'EM_FATURAMENTO',
+             payload_json = jsonb_set(
+               jsonb_set(
+                 COALESCE(payload_json, '{}'::jsonb),
+                 '{numeroNFe}', to_jsonb($2::text)
+               ),
+               '{chaveNFeEmitida}', to_jsonb($3::text)
+             ),
+             updated_at = CURRENT_TIMESTAMP
+           WHERE id = $1`,
+          [pedidoId, numFormatado, chaveAcesso]
         );
-        broadcastMutation({ entity: 'pedidos', action: 'UPSERT', id: pedidoId, payload: { id: pedidoId, status: 'EM_FATURAMENTO', chaveAcesso, numeroNota: numNota } });
+
+        // Atualizar cache em memória
+        inMemoryPedidos = inMemoryPedidos.map((ped) => {
+          if (ped.id === pedidoId || ped.numeroPedido === pedidoId) {
+            return {
+              ...ped,
+              status: 'EM_FATURAMENTO',
+              numeroNFe: numFormatado,
+              chaveNFeEmitida: chaveAcesso,
+              statusFiscalNfe: 'AUTORIZADA',
+              protocoloAutorizacao,
+              dataAutorizacaoSefaz: new Date().toLocaleString('pt-BR'),
+              dataFaturamento: new Date().toLocaleDateString('pt-BR'),
+            };
+          }
+          return ped;
+        });
+
+        broadcastMutation({
+          entity: 'pedidos_venda',
+          action: 'UPSERT',
+          id: pedidoId,
+          payload: {
+            id: pedidoId,
+            status: 'EM_FATURAMENTO',
+            chaveNFeEmitida: chaveAcesso,
+            numeroNFe: numFormatado,
+            statusFiscalNfe: 'AUTORIZADA',
+            protocoloAutorizacao,
+            dataAutorizacaoSefaz: new Date().toLocaleString('pt-BR'),
+            dataFaturamento: new Date().toLocaleDateString('pt-BR'),
+          },
+        });
       } catch (pErr) {
         console.warn('[Fiscal] Aviso ao atualizar status do pedido vinculado:', pErr.message);
       }

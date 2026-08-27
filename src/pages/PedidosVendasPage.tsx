@@ -202,57 +202,74 @@ export const PedidosVendasPage: React.FC = () => {
             const rawData = cp.data_emissao || cp.dataEmissao || new Date().toLocaleDateString('pt-BR');
             const dataFmt = typeof rawData === 'string' && rawData.includes('-') ? new Date(rawData).toLocaleDateString('pt-BR') : String(rawData);
 
+            const localExisting = localList.find((l) => l.id === cp.id || l.numeroPedido === String(rawNum));
+
             const itemFormatado: PedidoVendaItem = {
+              ...localExisting,
+              ...cp,
               id: cp.id,
               numeroPedido: String(rawNum),
-              tipoMovimento: cp.tipoMovimento || 'SAIDA',
-              status: cp.status || 'APROVADO',
+              tipoMovimento: cp.tipoMovimento || localExisting?.tipoMovimento || 'SAIDA',
+              status: cp.status || localExisting?.status || 'APROVADO',
               dataEmissao: dataFmt,
-              filialDepto: cp.filial_id || cp.filialDepto || 'MATRIZ - DOURADOS/MS',
-              clienteId: cp.cliente_id || cp.clienteId || '',
-              clienteCodigo: cp.clienteCodigo || '1',
+              filialDepto: cp.filial_id || cp.filialDepto || localExisting?.filialDepto || 'MATRIZ - DOURADOS/MS',
+              clienteId: cp.cliente_id || cp.clienteId || localExisting?.clienteId || '',
+              clienteCodigo: cp.clienteCodigo || localExisting?.clienteCodigo || '1',
               clienteNome: rawCliente,
-              clienteCnpjCpf: cp.cliente_cpf_cnpj || cp.clienteCnpjCpf || '',
-              clienteCidade: cp.cliente_cidade || cp.clienteCidade || 'DOURADOS',
-              clienteUf: cp.cliente_uf || cp.clienteUf || 'MS',
-              clienteEndereco: cp.cliente_endereco || cp.clienteEndereco || 'CENTRO',
-              clienteBairro: cp.cliente_bairro || cp.clienteBairro || 'CENTRO',
-              clienteTelefone: cp.clienteTelefone || '',
+              clienteCnpjCpf: cp.cliente_cpf_cnpj || cp.clienteCnpjCpf || localExisting?.clienteCnpjCpf || '',
+              clienteCidade: cp.cliente_cidade || cp.clienteCidade || localExisting?.clienteCidade || 'DOURADOS',
+              clienteUf: cp.cliente_uf || cp.clienteUf || localExisting?.clienteUf || 'MS',
+              clienteEndereco: cp.cliente_endereco || cp.clienteEndereco || localExisting?.clienteEndereco || 'CENTRO',
+              clienteBairro: cp.cliente_bairro || cp.clienteBairro || localExisting?.clienteBairro || 'CENTRO',
+              clienteTelefone: cp.clienteTelefone || localExisting?.clienteTelefone || '',
               naturezaOperacao: typeof cp.naturezaOperacao === 'object' && cp.naturezaOperacao !== null
                 ? cp.naturezaOperacao
-                : {
+                : (localExisting?.naturezaOperacao || {
                     cfop: '5102',
                     descricao: cp.natureza_operacao || '5102 - VENDA DE MERCADORIAS',
                     tipo: 'SAIDA',
                     geraFinanceiro: true,
                     movimentaEstoque: true,
                     destinacaoPadrao: 'ESTADUAL',
-                  },
-              vendedorId: cp.vendedorId || 'VEND-1',
-              vendedorNome: cp.vendedor_nome || cp.vendedorNome || 'CARLOS SILVA (INTERNO)',
-              tabelaPrecos: cp.tabelaPrecos || 'TABELA PADRÃO',
-              tipoFrete: cp.tipoFrete || 'CIF',
-              valorFrete: cp.valorFrete || 0,
-              pesoLiquidoKg: cp.pesoLiquidoKg || 0,
-              pesoBrutoKg: cp.pesoBrutoKg || 0,
-              quantidadeVolumes: cp.quantidadeVolumes || 1,
-              itens: Array.isArray(cp.itens) ? cp.itens : [],
-              totalProdutos: rawTotal,
-              totalDescontoGlobal: 0,
-              totalAcrescimos: 0,
-              totalIpi: 0,
-              totalIcms: 0,
-              totalIcmsSt: 0,
-              totalServicos: 0,
-              valorTotalFinal: rawTotal,
-              formaPagamentoNome: cp.formaPagamentoNome || 'A VISTA / A PRAZO',
-              parcelas: Array.isArray(cp.parcelas) ? cp.parcelas : [],
+                  }),
+              vendedorId: cp.vendedorId || localExisting?.vendedorId || 'VEND-1',
+              vendedorNome: cp.vendedor_nome || cp.vendedorNome || localExisting?.vendedorNome || 'CARLOS SILVA (INTERNO)',
+              tabelaPrecos: cp.tabelaPrecos || localExisting?.tabelaPrecos || 'TABELA PADRÃO',
+              tipoFrete: cp.tipoFrete || localExisting?.tipoFrete || 'CIF',
+              valorFrete: cp.valorFrete || localExisting?.valorFrete || 0,
+              pesoLiquidoKg: cp.pesoLiquidoKg || localExisting?.pesoLiquidoKg || 0,
+              pesoBrutoKg: cp.pesoBrutoKg || localExisting?.pesoBrutoKg || 0,
+              quantidadeVolumes: cp.quantidadeVolumes || localExisting?.quantidadeVolumes || 1,
+              itens: Array.isArray(cp.itens) && cp.itens.length > 0 ? cp.itens : (localExisting?.itens || []),
+              totalProdutos: rawTotal || localExisting?.totalProdutos || 0,
+              totalDescontoGlobal: cp.totalDescontoGlobal ?? localExisting?.totalDescontoGlobal ?? 0,
+              totalAcrescimos: cp.totalAcrescimos ?? localExisting?.totalAcrescimos ?? 0,
+              totalIpi: cp.totalIpi ?? localExisting?.totalIpi ?? 0,
+              totalIcms: cp.totalIcms ?? localExisting?.totalIcms ?? 0,
+              totalIcmsSt: cp.totalIcmsSt ?? localExisting?.totalIcmsSt ?? 0,
+              totalServicos: cp.totalServicos ?? localExisting?.totalServicos ?? 0,
+              valorTotalFinal: rawTotal || localExisting?.valorTotalFinal || 0,
+              formaPagamentoNome: cp.formaPagamentoNome || localExisting?.formaPagamentoNome || 'A VISTA / A PRAZO',
+              parcelas: Array.isArray(cp.parcelas) && cp.parcelas.length > 0 ? cp.parcelas : (localExisting?.parcelas || []),
+              // Preservação Estrita de Dados Fiscais da NF-e e NFC-e
+              numeroNFe: cp.numeroNFe || cp.numero_nfe || localExisting?.numeroNFe,
+              chaveNFeEmitida: cp.chaveNFeEmitida || cp.chave_nfe_emitida || cp.chaveAcesso || localExisting?.chaveNFeEmitida,
+              statusFiscalNfe: cp.statusFiscalNfe || cp.status_fiscal_nfe || localExisting?.statusFiscalNfe,
+              protocoloAutorizacao: cp.protocoloAutorizacao || cp.protocolo_autorizacao || localExisting?.protocoloAutorizacao,
+              dataAutorizacaoSefaz: cp.dataAutorizacaoSefaz || cp.data_autorizacao_sefaz || localExisting?.dataAutorizacaoSefaz,
+              dataFaturamento: cp.dataFaturamento || cp.data_faturamento || localExisting?.dataFaturamento,
+              numeroNFCe: cp.numeroNFCe || cp.numero_nfce || localExisting?.numeroNFCe,
+              chaveNFCeEmitida: cp.chaveNFCeEmitida || cp.chave_nfce_emitida || localExisting?.chaveNFCeEmitida,
+              statusFiscalNfce: cp.statusFiscalNfce || localExisting?.statusFiscalNfce,
+              chaveNFeAcobertamento: cp.chaveNFeAcobertamento || localExisting?.chaveNFeAcobertamento,
+              numeroNFeAcobertamento: cp.numeroNFeAcobertamento || localExisting?.numeroNFeAcobertamento,
+              reciboEmissao: cp.reciboEmissao || localExisting?.reciboEmissao,
             };
 
             map.set(cp.id, itemFormatado);
           });
 
-          // Mesclar com pedidos locais reais
+          // Mesclar com pedidos locais que não estão na nuvem
           localList.forEach((p) => {
             if (!map.has(p.id)) {
               map.set(p.id, p);

@@ -120,56 +120,73 @@ class SyncEngine {
             const rawData = p.data_emissao || p.dataEmissao || new Date().toLocaleDateString('pt-BR');
             const dataFmt = typeof rawData === 'string' && rawData.includes('-') ? new Date(rawData).toLocaleDateString('pt-BR') : String(rawData);
 
+            const idx = currentList.findIndex((item) => item.id === p.id || item.numeroPedido === String(rawNum));
+            const existingItem = idx >= 0 ? currentList[idx] : null;
+
             const formatado = {
+              ...existingItem,
+              ...p,
               id: p.id,
               numeroPedido: String(rawNum),
-              tipoMovimento: p.tipoMovimento || 'SAIDA',
-              status: p.status || 'APROVADO',
+              tipoMovimento: p.tipoMovimento || existingItem?.tipoMovimento || 'SAIDA',
+              status: p.status || existingItem?.status || 'APROVADO',
               dataEmissao: dataFmt,
-              filialDepto: p.filial_id || p.filialDepto || 'MATRIZ - DOURADOS/MS',
-              clienteId: p.cliente_id || p.clienteId || '',
-              clienteCodigo: p.clienteCodigo || '1',
+              filialDepto: p.filial_id || p.filialDepto || existingItem?.filialDepto || 'MATRIZ - DOURADOS/MS',
+              clienteId: p.cliente_id || p.clienteId || existingItem?.clienteId || '',
+              clienteCodigo: p.clienteCodigo || existingItem?.clienteCodigo || '1',
               clienteNome: rawCliente,
-              clienteCnpjCpf: p.cliente_cpf_cnpj || p.clienteCnpjCpf || '',
-              clienteCidade: p.cliente_cidade || p.clienteCidade || 'DOURADOS',
-              clienteUf: p.cliente_uf || p.clienteUf || 'MS',
-              clienteEndereco: p.cliente_endereco || p.clienteEndereco || 'CENTRO',
-              clienteBairro: p.cliente_bairro || p.clienteBairro || 'CENTRO',
-              clienteTelefone: p.clienteTelefone || '',
+              clienteCnpjCpf: p.cliente_cpf_cnpj || p.clienteCnpjCpf || existingItem?.clienteCnpjCpf || '',
+              clienteCidade: p.cliente_cidade || p.clienteCidade || existingItem?.clienteCidade || 'DOURADOS',
+              clienteUf: p.cliente_uf || p.clienteUf || existingItem?.clienteUf || 'MS',
+              clienteEndereco: p.cliente_endereco || p.clienteEndereco || existingItem?.clienteEndereco || 'CENTRO',
+              clienteBairro: p.cliente_bairro || p.clienteBairro || existingItem?.clienteBairro || 'CENTRO',
+              clienteTelefone: p.clienteTelefone || existingItem?.clienteTelefone || '',
               naturezaOperacao: typeof p.naturezaOperacao === 'object' && p.naturezaOperacao !== null
                 ? p.naturezaOperacao
-                : {
+                : (existingItem?.naturezaOperacao || {
                     cfop: '5102',
                     descricao: p.natureza_operacao || '5102 - VENDA DE MERCADORIAS',
                     tipo: 'SAIDA',
                     geraFinanceiro: true,
                     movimentaEstoque: true,
                     destinacaoPadrao: 'ESTADUAL',
-                  },
-              vendedorId: p.vendedorId || 'VEND-1',
-              vendedorNome: p.vendedor_nome || p.vendedorNome || 'CARLOS SILVA (INTERNO)',
-              tabelaPrecos: p.tabelaPrecos || 'TABELA PADRÃO',
-              tipoFrete: p.tipoFrete || 'CIF',
-              valorFrete: p.valorFrete || 0,
-              pesoLiquidoKg: p.pesoLiquidoKg || 0,
-              pesoBrutoKg: p.pesoBrutoKg || 0,
-              quantidadeVolumes: p.quantidadeVolumes || 1,
-              itens: Array.isArray(p.itens) ? p.itens : [],
-              totalProdutos: rawTotal,
-              totalDescontoGlobal: 0,
-              totalAcrescimos: 0,
-              totalIpi: 0,
-              totalIcms: 0,
-              totalIcmsSt: 0,
-              totalServicos: 0,
-              valorTotalFinal: rawTotal,
-              formaPagamentoNome: p.formaPagamentoNome || 'A VISTA / A PRAZO',
-              parcelas: Array.isArray(p.parcelas) ? p.parcelas : [],
+                  }),
+              vendedorId: p.vendedorId || existingItem?.vendedorId || 'VEND-1',
+              vendedorNome: p.vendedor_nome || p.vendedorNome || existingItem?.vendedorNome || 'CARLOS SILVA (INTERNO)',
+              tabelaPrecos: p.tabelaPrecos || existingItem?.tabelaPrecos || 'TABELA PADRÃO',
+              tipoFrete: p.tipoFrete || existingItem?.tipoFrete || 'CIF',
+              valorFrete: p.valorFrete || existingItem?.valorFrete || 0,
+              pesoLiquidoKg: p.pesoLiquidoKg || existingItem?.pesoLiquidoKg || 0,
+              pesoBrutoKg: p.pesoBrutoKg || existingItem?.pesoBrutoKg || 0,
+              quantidadeVolumes: p.quantidadeVolumes || existingItem?.quantidadeVolumes || 1,
+              itens: Array.isArray(p.itens) && p.itens.length > 0 ? p.itens : (existingItem?.itens || []),
+              totalProdutos: rawTotal || existingItem?.totalProdutos || 0,
+              totalDescontoGlobal: p.totalDescontoGlobal ?? existingItem?.totalDescontoGlobal ?? 0,
+              totalAcrescimos: p.totalAcrescimos ?? existingItem?.totalAcrescimos ?? 0,
+              totalIpi: p.totalIpi ?? existingItem?.totalIpi ?? 0,
+              totalIcms: p.totalIcms ?? existingItem?.totalIcms ?? 0,
+              totalIcmsSt: p.totalIcmsSt ?? existingItem?.totalIcmsSt ?? 0,
+              totalServicos: p.totalServicos ?? existingItem?.totalServicos ?? 0,
+              valorTotalFinal: rawTotal || existingItem?.valorTotalFinal || 0,
+              formaPagamentoNome: p.formaPagamentoNome || existingItem?.formaPagamentoNome || 'A VISTA / A PRAZO',
+              parcelas: Array.isArray(p.parcelas) && p.parcelas.length > 0 ? p.parcelas : (existingItem?.parcelas || []),
+              // Blindagem de Dados Fiscais da NF-e e NFC-e
+              numeroNFe: p.numeroNFe || p.numero_nfe || (p.numeroNota ? String(p.numeroNota) : existingItem?.numeroNFe),
+              chaveNFeEmitida: p.chaveNFeEmitida || p.chave_nfe_emitida || p.chaveAcesso || existingItem?.chaveNFeEmitida,
+              statusFiscalNfe: p.statusFiscalNfe || p.status_fiscal_nfe || (p.chaveAcesso ? 'AUTORIZADA' : existingItem?.statusFiscalNfe),
+              protocoloAutorizacao: p.protocoloAutorizacao || p.protocolo_autorizacao || existingItem?.protocoloAutorizacao,
+              dataAutorizacaoSefaz: p.dataAutorizacaoSefaz || p.data_autorizacao_sefaz || existingItem?.dataAutorizacaoSefaz,
+              dataFaturamento: p.dataFaturamento || p.data_faturamento || existingItem?.dataFaturamento,
+              numeroNFCe: p.numeroNFCe || p.numero_nfce || existingItem?.numeroNFCe,
+              chaveNFCeEmitida: p.chaveNFCeEmitida || p.chave_nfce_emitida || existingItem?.chaveNFCeEmitida,
+              statusFiscalNfce: p.statusFiscalNfce || existingItem?.statusFiscalNfce,
+              chaveNFeAcobertamento: p.chaveNFeAcobertamento || existingItem?.chaveNFeAcobertamento,
+              numeroNFeAcobertamento: p.numeroNFeAcobertamento || existingItem?.numeroNFeAcobertamento,
+              reciboEmissao: p.reciboEmissao || existingItem?.reciboEmissao,
             };
 
-            const idx = currentList.findIndex((item) => item.id === p.id);
             if (idx >= 0) {
-              currentList[idx] = { ...currentList[idx], ...formatado };
+              currentList[idx] = formatado;
             } else {
               currentList = [formatado, ...currentList];
             }
