@@ -5,6 +5,8 @@ import fs from 'fs';
 import crypto from 'crypto';
 import zlib from 'zlib';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
 import pkg from 'pg';
 const { Pool } = pkg;
 import {
