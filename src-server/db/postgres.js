@@ -9,21 +9,27 @@ const logger = require('../config/logger');
 const dbContext = new AsyncLocalStorage();
 
 // PostgreSQL Pool for Dashboard (Coliseu)
-const pool = new Pool({
-    host: config.postgres.host,
-    port: config.postgres.port,
-    database: config.postgres.database,
-    user: config.postgres.user,
-    password: config.postgres.password,
-    ssl: config.postgres.ssl ? { rejectUnauthorized: false } : false,
-    max: 50,
-    min: 10,
-    idleTimeoutMillis: 5000,
-    connectionTimeoutMillis: 10000,
-    statement_timeout: 30000,
-    keepalives: true,
-    keepalivesIdle: 30,
-});
+const poolConfig = config.postgres.connectionString
+    ? {
+        connectionString: config.postgres.connectionString,
+        ssl: config.postgres.ssl ? { rejectUnauthorized: false } : false,
+        max: 50,
+        idleTimeoutMillis: 10000,
+        connectionTimeoutMillis: 10000,
+    }
+    : {
+        host: config.postgres.host,
+        port: config.postgres.port,
+        database: config.postgres.database,
+        user: config.postgres.user,
+        password: config.postgres.password,
+        ssl: config.postgres.ssl ? { rejectUnauthorized: false } : false,
+        max: 50,
+        idleTimeoutMillis: 10000,
+        connectionTimeoutMillis: 10000,
+    };
+
+const pool = new Pool(poolConfig);
 
 pool.on('error', (err) => {
     logger.error('[DB] Erro inesperado em cliente ocioso do PostgreSQL', err);
