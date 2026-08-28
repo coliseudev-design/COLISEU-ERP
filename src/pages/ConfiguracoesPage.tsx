@@ -4,7 +4,7 @@ import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { AIInsight } from '../components/ui/AIComponents';
-import { Save, Building2, ShieldCheck, Printer, Key, Mail, CheckCircle2, Sliders, DollarSign, FileText, Receipt, Truck, RefreshCw, Cpu, Database, Server, ExternalLink, Activity } from 'lucide-react';
+import { Save, Building2, ShieldCheck, Printer, Key, Mail, CheckCircle2, Sliders, DollarSign, FileText, Receipt, Truck, RefreshCw, Cpu, Database, Server, ExternalLink, Activity, Copy, Check } from 'lucide-react';
 import { getNfeConfig, salvarNfeConfig } from '../lib/nfeConfig';
 import { getNfceConfig, salvarNfceConfig } from '../lib/nfceConfig';
 import { configuracoesService } from '../lib/configuracoes';
@@ -451,8 +451,6 @@ export const ConfiguracoesPage: React.FC = () => {
                 </p>
               </div>
             </div>
-
-            {/* PAINEL: IDENTIDADE & SERVIDOR DE LICENÇAS (COLISEU IDENTITY) */}
             <div style={{
               border: '1px solid var(--border-subtle)',
               borderRadius: '10px',
@@ -460,28 +458,49 @@ export const ConfiguracoesPage: React.FC = () => {
               backgroundColor: 'var(--surface-1)',
               marginBottom: '16px'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <ShieldCheck size={18} style={{ color: 'var(--action-primary)' }} />
-                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                    Servidor Central de Licenças & Identidade (Coliseu.Identity)
-                  </span>
+                  <div>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', display: 'block' }}>
+                      Servidor Central de Licenças & Identidade (Coliseu.Identity)
+                    </span>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      Credenciais oficiais para autenticação no Worker C# (.NET) e sincronização com o Firebird
+                    </span>
+                  </div>
                 </div>
-                <a 
-                  href="https://adminlicencas.coliseusistemas.com.br" 
-                  target="_blank" 
-                  rel="noreferrer"
-                  className="coliseu-btn coliseu-btn-secondary"
-                  style={{ fontSize: '11px', padding: '4px 10px', height: '28px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}
-                >
-                  <span>Painel Admin Licenças</span>
-                  <ExternalLink size={12} />
-                </a>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const snippet = `TenantId: 1e40d65f-4319-4c68-ae13-66223820c095\nIdentityUrl: https://adminlicencas.coliseusistemas.com.br\nErpUrl: https://erp.coliseusistemas.com.br\nErpApiKey: COL-J68R-5V5Z-334M`;
+                      navigator.clipboard.writeText(snippet);
+                      showToast('📋 Todas as credenciais do Coliseu ERP foram copiadas!');
+                    }}
+                    className="coliseu-btn coliseu-btn-secondary"
+                    style={{ fontSize: '11px', padding: '4px 10px', height: '28px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <Copy size={12} />
+                    <span>Copiar Dados do Worker</span>
+                  </button>
+                  <a 
+                    href="https://adminlicencas.coliseusistemas.com.br" 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="coliseu-btn coliseu-btn-secondary"
+                    style={{ fontSize: '11px', padding: '4px 10px', height: '28px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <span>Painel Admin Licenças</span>
+                    <ExternalLink size={12} />
+                  </a>
+                </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '12px', fontSize: '11px', marginBottom: '12px' }}>
+              {/* GRID COM 4 CAMPOS SEPARADOS */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '12px', fontSize: '11px', marginBottom: '12px' }}>
                 <div>
-                  <label className="coliseu-label" style={{ fontSize: '10px' }}>Chave Identificadora da Empresa (Tenant UUID)</label>
+                  <label className="coliseu-label" style={{ fontSize: '10px' }}>Chave da Empresa (Tenant UUID)</label>
                   <div style={{ display: 'flex', gap: '6px' }}>
                     <input 
                       type="text" 
@@ -498,44 +517,105 @@ export const ConfiguracoesPage: React.FC = () => {
                       }}
                       className="coliseu-btn coliseu-btn-secondary"
                       style={{ padding: '0 8px', fontSize: '11px' }}
+                      title="Copiar Chave da Empresa"
                     >
-                      Copiar
+                      <Copy size={12} />
                     </button>
                   </div>
                 </div>
                 <div>
                   <label className="coliseu-label" style={{ fontSize: '10px' }}>URL Identity Server</label>
-                  <input 
-                    type="text" 
-                    readOnly 
-                    value="https://adminlicencas.coliseusistemas.com.br" 
-                    className="coliseu-input text-mono" 
-                    style={{ fontSize: '11px', backgroundColor: 'var(--surface-2)' }} 
-                  />
-                </div>
-                <div>
-                  <label className="coliseu-label" style={{ fontSize: '10px' }}>Chave de API do Coliseu Dash / ERP</label>
                   <div style={{ display: 'flex', gap: '6px' }}>
                     <input 
                       type="text" 
                       readOnly 
-                      value="COL-YUZA-9WSK-TN88" 
+                      value="https://adminlicencas.coliseusistemas.com.br" 
                       className="coliseu-input text-mono" 
-                      style={{ fontSize: '11px', backgroundColor: 'var(--surface-2)', fontWeight: 600 }} 
+                      style={{ fontSize: '11px', backgroundColor: 'var(--surface-2)' }} 
                     />
                     <button 
                       type="button"
                       onClick={() => {
-                        navigator.clipboard.writeText('COL-YUZA-9WSK-TN88');
-                        showToast('Chave de API do Coliseu Dash copiada!');
+                        navigator.clipboard.writeText('https://adminlicencas.coliseusistemas.com.br');
+                        showToast('URL Identity Server copiada!');
                       }}
                       className="coliseu-btn coliseu-btn-secondary"
                       style={{ padding: '0 8px', fontSize: '11px' }}
+                      title="Copiar URL Identity"
                     >
-                      Copiar
+                      <Copy size={12} />
                     </button>
                   </div>
                 </div>
+                <div>
+                  <label className="coliseu-label" style={{ fontSize: '10px', color: 'var(--action-primary)', fontWeight: 700 }}>
+                    🏢 Chave de API do Coliseu ERP (InternalApiKey)
+                  </label>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <input 
+                      type="text" 
+                      readOnly 
+                      value="COL-J68R-5V5Z-334M" 
+                      className="coliseu-input text-mono" 
+                      style={{ fontSize: '11px', backgroundColor: 'rgba(59, 130, 246, 0.08)', borderColor: 'var(--action-primary)', fontWeight: 700, color: 'var(--action-primary)' }} 
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText('COL-J68R-5V5Z-334M');
+                        showToast('Chave de API do Coliseu ERP copiada!');
+                      }}
+                      className="coliseu-btn coliseu-btn-primary"
+                      style={{ padding: '0 8px', fontSize: '11px' }}
+                      title="Copiar Chave do Coliseu ERP"
+                    >
+                      <Copy size={12} />
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="coliseu-label" style={{ fontSize: '10px' }}>URL da API Coliseu ERP</label>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <input 
+                      type="text" 
+                      readOnly 
+                      value="https://erp.coliseusistemas.com.br" 
+                      className="coliseu-input text-mono" 
+                      style={{ fontSize: '11px', backgroundColor: 'var(--surface-2)' }} 
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText('https://erp.coliseusistemas.com.br');
+                        showToast('URL da API do ERP copiada!');
+                      }}
+                      className="coliseu-btn coliseu-btn-secondary"
+                      style={{ padding: '0 8px', fontSize: '11px' }}
+                      title="Copiar URL do ERP"
+                    >
+                      <Copy size={12} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* AVISO DE BOAS PRÁTICAS DO WORKER v2.5.145 */}
+              <div style={{
+                backgroundColor: 'rgba(59, 130, 246, 0.05)',
+                border: '1px solid rgba(59, 130, 246, 0.2)',
+                borderRadius: '6px',
+                padding: '8px 12px',
+                fontSize: '11px',
+                color: 'var(--text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '12px'
+              }}>
+                <span style={{ fontSize: '14px' }}>💡</span>
+                <span>
+                  <strong>Worker Configurator v2.5.145+:</strong> Utilize a seção dedicada <strong>🏢 Coliseu ERP</strong> no Configurador com a chave <code style={{ backgroundColor: 'var(--surface-1)', padding: '1px 5px', borderRadius: '3px', fontWeight: 700, color: 'var(--action-primary)' }}>COL-J68R-5V5Z-334M</code>. Não utilize mais o card do Coliseu Dash para o ERP.
+                </span>
               </div>
 
               {/* TABELA DE MÓDULOS HABILITADOS NO ECOSSISTEMA */}
@@ -543,7 +623,12 @@ export const ConfiguracoesPage: React.FC = () => {
                 <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
                   Módulos Habilitados para Sincronização via Worker:
                 </span>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '8px' }}>
+                  {/* CARD DESTAQUE: COLISEU ERP */}
+                  <div style={{ padding: '6px 10px', borderRadius: '6px', backgroundColor: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--action-primary)' }}>🏢 Coliseu ERP (Nuvem)</span>
+                    <span style={{ fontSize: '9px', fontWeight: 700, color: '#fff', backgroundColor: 'var(--action-primary)', padding: '1px 5px', borderRadius: '4px' }}>ATIVO</span>
+                  </div>
                   <div style={{ padding: '6px 10px', borderRadius: '6px', backgroundColor: 'var(--surface-2)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>📊 Coliseu Dash (BI)</span>
                     <span style={{ fontSize: '9px', fontWeight: 700, color: '#10b981', backgroundColor: '#10b98120', padding: '1px 5px', borderRadius: '4px' }}>ATIVO</span>
@@ -568,6 +653,10 @@ export const ConfiguracoesPage: React.FC = () => {
                     <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>🛡️ Controle Garantias</span>
                     <span style={{ fontSize: '9px', fontWeight: 700, color: '#10b981', backgroundColor: '#10b98120', padding: '1px 5px', borderRadius: '4px' }}>ATIVO</span>
                   </div>
+                  <div style={{ padding: '6px 10px', borderRadius: '6px', backgroundColor: 'var(--surface-2)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>🚀 ColiseSpeed</span>
+                    <span style={{ fontSize: '9px', fontWeight: 700, color: '#10b981', backgroundColor: '#10b98120', padding: '1px 5px', borderRadius: '4px' }}>ATIVO</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -579,30 +668,37 @@ export const ConfiguracoesPage: React.FC = () => {
               padding: '16px',
               backgroundColor: 'var(--surface-1)'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <Activity size={18} style={{ color: modoOperacao === 'firebird_worker' ? '#10b981' : 'var(--text-muted)' }} />
-                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                    Status da Sincronização Local (Coliseu Sales — Worker Configurator v2.5.143)
-                  </span>
+                  <div>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', display: 'block' }}>
+                      Status da Sincronização Local (Coliseu Sales — Worker Configurator v2.5.145+)
+                    </span>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      Fluxo de dados bidirecional entre Firebird (Desktop) e Coliseu ERP Nuvem
+                    </span>
+                  </div>
                 </div>
-                <button 
-                  type="button"
-                  disabled={isSyncingWorker}
-                  onClick={async () => {
-                    setIsSyncingWorker(true);
-                    await configuracoesService.forcarSyncWorker();
-                    const st = await configuracoesService.getWorkerSyncStatus();
-                    if (st?.status) setWorkerStatus(st.status);
-                    setIsSyncingWorker(false);
-                    showToast('Sincronização com o Worker solicitada com sucesso!');
-                  }}
-                  className="coliseu-btn coliseu-btn-secondary"
-                  style={{ fontSize: '11px', padding: '4px 10px', height: '30px' }}
-                >
-                  <RefreshCw size={12} className={isSyncingWorker ? 'animate-spin' : ''} />
-                  {isSyncingWorker ? 'Sincronizando...' : 'Atualizar / Forçar Sync'}
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button 
+                    type="button"
+                    disabled={isSyncingWorker}
+                    onClick={async () => {
+                      setIsSyncingWorker(true);
+                      await configuracoesService.forcarSyncWorker();
+                      const st = await configuracoesService.getWorkerSyncStatus();
+                      if (st?.status) setWorkerStatus(st.status);
+                      setIsSyncingWorker(false);
+                      showToast('Sincronização com o Worker solicitada com sucesso!');
+                    }}
+                    className="coliseu-btn coliseu-btn-secondary"
+                    style={{ fontSize: '11px', padding: '4px 10px', height: '30px' }}
+                  >
+                    <RefreshCw size={12} className={isSyncingWorker ? 'animate-spin' : ''} />
+                    {isSyncingWorker ? 'Sincronizando...' : 'Atualizar / Forçar Sync'}
+                  </button>
+                </div>
               </div>
 
               {/* TABELA DE METADADOS DE SINCRONIZAÇÃO */}
@@ -610,67 +706,110 @@ export const ConfiguracoesPage: React.FC = () => {
                 <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', textAlign: 'left' }}>
-                      <th style={{ padding: '6px 8px' }}>Tabela / Entidade</th>
+                      <th style={{ padding: '6px 8px' }}>Tabela / Entidade Sincronizada</th>
                       <th style={{ padding: '6px 8px' }}>Última Sincronização</th>
                       <th style={{ padding: '6px 8px' }}>Registros Processados</th>
                       <th style={{ padding: '6px 8px' }}>Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {workerStatus.length > 0 ? (
-                      workerStatus.map((row: any, i: number) => (
-                        <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                          <td style={{ padding: '6px 8px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                            {row.tabela === '__heartbeat__' ? '📡 Heartbeat Conexão Firebird (Porta 3050)' : row.tabela}
-                          </td>
-                          <td style={{ padding: '6px 8px', color: 'var(--text-secondary)' }}>
-                            {row.ultima ? new Date(row.ultima).toLocaleString() : 'Pendente'}
-                          </td>
-                          <td style={{ padding: '6px 8px', color: 'var(--text-primary)' }}>
-                            {row.registros || row.total_registros || 0}
-                          </td>
+                    {(() => {
+                      const entityLabels: Record<string, string> = {
+                        '__heartbeat__': '📡 Heartbeat Conexão Firebird (Porta 3050)',
+                        'dash_vendas': '🛒 Vendas & Pedidos Faturados (Firebird)',
+                        'dash_vendas_itens': '🛍️ Itens de Vendas & Composição de Produtos',
+                        'dash_produtos': '📦 Catálogo de Produtos & Estoque Central',
+                        'dash_clientes': '👥 Cadastro de Clientes & Limites de Crédito',
+                        'dash_fornecedores': '🏭 Fornecedores & Fabricantes',
+                        'dash_vendedores': '👔 Vendedores & Representantes',
+                        'dash_financeiro': '💰 Títulos a Receber, Pagar & Quitações',
+                        'dash_compras': '📥 Pedidos de Compras Faturados',
+                        'dash_devolucoes': '🔄 Devoluções & Garantias',
+                        'dash_comissoes': '💼 Comissões de Vendas',
+                        'dash_caixas': '💳 Caixas & Contas Correntes',
+                        'dash_filiais': '🏢 Unidades & Filiais'
+                      };
+
+                      if (workerStatus.length > 0) {
+                        return workerStatus.map((row: any, i: number) => {
+                          const label = entityLabels[row.tabela] || row.tabela;
+                          return (
+                            <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                              <td style={{ padding: '6px 8px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                {label}
+                              </td>
+                              <td style={{ padding: '6px 8px', color: 'var(--text-secondary)' }}>
+                                {row.ultima ? new Date(row.ultima).toLocaleString('pt-BR') : 'Pendente'}
+                              </td>
+                              <td style={{ padding: '6px 8px', color: 'var(--text-primary)', fontFamily: 'var(--font-family-mono)' }}>
+                                {row.registros || row.total_registros || 0}
+                              </td>
+                              <td style={{ padding: '6px 8px' }}>
+                                <span style={{
+                                  fontSize: '10px',
+                                  fontWeight: 700,
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  backgroundColor: row.status === 'OK' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                                  color: row.status === 'OK' ? '#10b981' : '#ef4444'
+                                }}>
+                                  {row.status === 'OK' ? 'CONECTADO / OK' : (row.status || 'OFFLINE')}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        });
+                      }
+
+                      // Lista de visualização padrão quando ainda não há dados no banco
+                      const defaultEntities = [
+                        { name: '📡 Heartbeat Conexão Firebird (Porta 3050)', desc: 'Monitor de conectividade ativa do Worker local' },
+                        { name: '🛒 Vendas & Pedidos Faturados (Firebird)', desc: 'Alimenta os 13 dashboards de BI e emissão de MDF-e' },
+                        { name: '📦 Catálogo de Produtos & Estoque Central', desc: 'Preços, custos, referências e saldo de estoque' },
+                        { name: '👥 Cadastro de Clientes & Limites de Crédito', desc: 'Ficha cadastral 360, CNPJ/CPF, endereços e financeiro' },
+                        { name: '💰 Títulos a Receber, Pagar & Quitações', desc: 'Fluxo de caixa consolidado, extrato de quitação e DRE' },
+                        { name: '🚚 Manifesto de Carga & NF-es Faturadas', desc: 'Seleção direta das NF-es do Firebird para emissão de MDF-e' }
+                      ];
+
+                      return defaultEntities.map((ent, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                           <td style={{ padding: '6px 8px' }}>
-                            <span style={{
-                              fontSize: '10px',
-                              fontWeight: 700,
-                              padding: '2px 6px',
-                              borderRadius: '4px',
-                              backgroundColor: row.status === 'OK' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                              color: row.status === 'OK' ? '#10b981' : '#ef4444'
-                            }}>
-                              {row.status === 'OK' ? 'CONECTADO / OK' : (row.status || 'OFFLINE')}
+                            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{ent.name}</div>
+                            <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{ent.desc}</div>
+                          </td>
+                          <td style={{ padding: '6px 8px', color: 'var(--text-secondary)' }}>Aguardando Worker</td>
+                          <td style={{ padding: '6px 8px', color: 'var(--text-secondary)', fontFamily: 'var(--font-family-mono)' }}>0</td>
+                          <td style={{ padding: '6px 8px' }}>
+                            <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px', backgroundColor: 'var(--surface-2)', color: 'var(--text-muted)' }}>
+                              PRONTO / AGUARDANDO
                             </span>
                           </td>
                         </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={4} style={{ padding: '12px 8px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                          Nenhum registro de sincronização recebido ainda. Inicie o serviço <strong>ColiseuSales.Worker</strong> no servidor local.
-                        </td>
-                      </tr>
-                    )}
+                      ));
+                    })()}
                   </tbody>
                 </table>
               </div>
 
-              {/* INSTRUÇÕES DO APPSPEC */}
+              {/* INSTRUÇÕES DO APPSPEC ATUALIZADAS PARA v2.5.145 */}
               <div style={{
                 backgroundColor: 'var(--surface-2)',
-                borderRadius: '6px',
-                padding: '12px',
+                borderRadius: '8px',
+                padding: '14px',
                 fontSize: '11px',
                 color: 'var(--text-secondary)',
-                lineHeight: 1.6
+                lineHeight: 1.7,
+                border: '1px solid var(--border-subtle)'
               }}>
-                <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
-                  ⚙️ Como Conectar no Worker Configurator (v2.5.143):
+                <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '8px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>⚙️ Como Conectar no Worker Configurator (v2.5.145+):</span>
                 </div>
-                <div>1. Abra o aplicativo <strong>Coliseu Sales — Worker Configurator</strong> no servidor onde o Firebird está instalado.</div>
-                <div>2. No campo <strong>Caminho do Banco</strong>, informe o arquivo do Firebird: <code style={{ backgroundColor: 'var(--surface-1)', padding: '2px 4px', borderRadius: '3px' }}>C:\Coliseu\Data\PIVETA.FDB</code> e clique em <strong>Preparar Banco</strong>.</div>
+                <div>1. Abra o aplicativo <strong>Coliseu Sales — Worker Configurator v2.5.145</strong> no servidor onde o Firebird está instalado (<code style={{ backgroundColor: 'var(--surface-1)', padding: '2px 4px', borderRadius: '3px' }}>C:\Sales\ColiseuSales.Configurator2.5.145.0.exe</code>).</div>
+                <div>2. No campo <strong>Caminho do Banco</strong>, informe o arquivo do Firebird: <code style={{ backgroundColor: 'var(--surface-1)', padding: '2px 4px', borderRadius: '3px' }}>C:\Coliseu\Data\PIVETA.FDB</code> e clique em <strong>Preparar Banco / Testar Conexão</strong>.</div>
                 <div>3. No campo <strong>URL Identity</strong>, informe: <code style={{ backgroundColor: 'var(--surface-1)', padding: '2px 4px', borderRadius: '3px' }}>https://adminlicencas.coliseusistemas.com.br</code>.</div>
-                <div>4. No campo <strong>Chave</strong>, cole a Chave da Empresa: <code style={{ backgroundColor: 'var(--surface-1)', padding: '2px 4px', borderRadius: '3px' }}>1e40d65f-4319-4c68-ae13-66223820c095</code>.</div>
-                <div>5. Marque a caixa <strong>Coliseu Dash</strong> com URL: <code style={{ backgroundColor: 'var(--surface-1)', padding: '2px 4px', borderRadius: '3px' }}>https://erp.coliseusistemas.com.br</code> e Internal API Key: <code style={{ backgroundColor: 'var(--surface-1)', padding: '2px 4px', borderRadius: '3px' }}>COL-YUZA-9WSK-TN88</code>.</div>
+                <div>4. No campo <strong>Chave da Empresa (Tenant UUID)</strong>, cole: <code style={{ backgroundColor: 'var(--surface-1)', padding: '2px 4px', borderRadius: '3px' }}>1e40d65f-4319-4c68-ae13-66223820c095</code>.</div>
+                <div>5. Na seção <strong>🏢 Coliseu ERP</strong>, marque a caixa <strong>Habilitar sincronização Coliseu ERP</strong>, confirme a URL <code style={{ backgroundColor: 'var(--surface-1)', padding: '2px 4px', borderRadius: '3px' }}>https://erp.coliseusistemas.com.br</code> e informe a Internal API Key: <code style={{ backgroundColor: 'var(--surface-1)', padding: '2px 4px', borderRadius: '3px', fontWeight: 700, color: 'var(--action-primary)' }}>COL-J68R-5V5Z-334M</code>.</div>
+                <div>6. Clique em <strong>Salvar e Aplicar</strong>. O Worker iniciará a sincronização automática dos dados em segundo plano.</div>
               </div>
             </div>
           </div>

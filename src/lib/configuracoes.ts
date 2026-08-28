@@ -1,4 +1,4 @@
-import { safeInvoke as invoke } from "./ipc";
+import { invoke } from "@tauri-apps/api/core";
 
 export interface EmpresaConfigInput {
   id: string;
