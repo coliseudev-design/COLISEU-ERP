@@ -45,11 +45,11 @@ const config = {
 
     postgres: {
         connectionString: optional('DATABASE_URL') || optional('DB_URL') || '',
-        host: optional('DATABASE_HOST') || optional('DB_HOST') || optional('VITE_DB_HOST') || optional('POSTGRES_HOST') || optional('PG_HOST', 'postgres-central'),
+        host: optional('DATABASE_HOST') || optional('DB_HOST') || optional('VITE_DB_HOST') || optional('POSTGRES_HOST') || optional('PG_HOST', 'postgres'),
         port: parseInt(optional('DATABASE_PORT') || optional('DB_PORT') || optional('VITE_DB_PORT') || optional('POSTGRES_PORT') || optional('PG_PORT', '5432'), 10),
         database: optional('DATABASE_NAME') || optional('DB_NAME') || optional('POSTGRES_DB') || optional('PG_DATABASE', 'coliseu_erp'),
-        user: optional('DATABASE_USER') || optional('DB_USER') || optional('POSTGRES_USER') || optional('PG_USER', 'coliseu_admin'),
-        password: optional('DATABASE_PASSWORD') || optional('DB_PASSWORD') || optional('POSTGRES_PASSWORD') || optional('PG_PASSWORD', ''),
+        user: optional('DATABASE_USER') || optional('DB_USER') || optional('POSTGRES_USER') || optional('PG_USER', 'postgres'),
+        password: optional('DATABASE_PASSWORD') || optional('DB_PASSWORD') || optional('POSTGRES_PASSWORD') || optional('PG_PASSWORD', 'postgres123'),
         ssl: optional('PG_SSL', 'false') === 'true' || optional('DB_SSL', 'false') === 'true',
     },
 };

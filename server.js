@@ -39,11 +39,11 @@ const pool = new Pool(
   connectionString
     ? { connectionString, max: 20, idleTimeoutMillis: 60000, connectionTimeoutMillis: 10000 }
     : {
-        host: process.env.VITE_DB_HOST || process.env.DB_HOST || 'postgres-central',
-        port: parseInt(process.env.VITE_DB_PORT || process.env.DB_PORT || '5432', 10),
-        user: process.env.POSTGRES_USER || process.env.DB_USER || 'coliseu_admin',
-        password: process.env.POSTGRES_PASSWORD || process.env.DB_PASSWORD,
-        database: process.env.POSTGRES_DB || process.env.DB_NAME || 'coliseu_erp',
+        host: process.env.DATABASE_HOST || process.env.DB_HOST || process.env.VITE_DB_HOST || process.env.POSTGRES_HOST || process.env.PG_HOST || 'postgres',
+        port: parseInt(process.env.DATABASE_PORT || process.env.DB_PORT || process.env.VITE_DB_PORT || process.env.POSTGRES_PORT || process.env.PG_PORT || '5432', 10),
+        user: process.env.DATABASE_USER || process.env.DB_USER || process.env.POSTGRES_USER || process.env.PG_USER || 'postgres',
+        password: process.env.DATABASE_PASSWORD || process.env.DB_PASSWORD || process.env.POSTGRES_PASSWORD || process.env.PG_PASSWORD || 'postgres123',
+        database: process.env.DATABASE_NAME || process.env.DB_NAME || process.env.POSTGRES_DB || process.env.PG_DATABASE || 'coliseu_erp',
         max: 20,
         idleTimeoutMillis: 60000,
         connectionTimeoutMillis: 10000,
