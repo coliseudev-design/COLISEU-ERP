@@ -241,6 +241,242 @@ async function initDb() {
       );
       CREATE INDEX IF NOT EXISTS idx_doc_fiscais_chave ON documentos_fiscais(chave_acesso);
       CREATE INDEX IF NOT EXISTS idx_doc_fiscais_periodo ON documentos_fiscais(empresa_id, modelo, data_emissao);
+
+      -- 9. Tabelas do Worker / Dashboard Central (dash_*)
+      CREATE TABLE IF NOT EXISTS dash_sync_metadata (
+        id SERIAL PRIMARY KEY,
+        tenant_id UUID NOT NULL,
+        tabela VARCHAR(100) NOT NULL,
+        ultima_sincronizacao TIMESTAMPTZ,
+        registros_sincronizados INTEGER DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'OK',
+        erro_mensagem TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(tenant_id, tabela)
+      );
+
+      CREATE TABLE IF NOT EXISTS dash_clientes (
+        id SERIAL PRIMARY KEY,
+        tenant_id UUID NOT NULL,
+        id_firebird INTEGER NOT NULL,
+        nome VARCHAR(255) NOT NULL,
+        documento VARCHAR(100),
+        email VARCHAR(255),
+        telefone VARCHAR(100),
+        cidade VARCHAR(255),
+        estado VARCHAR(2),
+        classificacao VARCHAR(50),
+        tipo VARCHAR(50),
+        data_cadastro TIMESTAMPTZ,
+        ativo BOOLEAN DEFAULT TRUE,
+        sincronizado_em TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(tenant_id, id_firebird)
+      );
+
+      CREATE TABLE IF NOT EXISTS dash_produtos (
+        id SERIAL PRIMARY KEY,
+        tenant_id UUID NOT NULL,
+        id_firebird INTEGER NOT NULL,
+        codigo VARCHAR(50),
+        nome VARCHAR(255) NOT NULL,
+        descricao TEXT,
+        categoria VARCHAR(255),
+        marca VARCHAR(255),
+        preco DECIMAL(15,2) NOT NULL DEFAULT 0,
+        custo DECIMAL(15,2) NOT NULL DEFAULT 0,
+        estoque DECIMAL(15,3) NOT NULL DEFAULT 0,
+        estoque_minimo DECIMAL(15,3) DEFAULT 0,
+        marca_id INTEGER DEFAULT NULL,
+        grupo_id INTEGER DEFAULT NULL,
+        referencia VARCHAR(255),
+        codigo_fabrica VARCHAR(255),
+        ativo BOOLEAN DEFAULT TRUE,
+        sincronizado_em TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(tenant_id, id_firebird)
+      );
+
+      CREATE TABLE IF NOT EXISTS dash_vendedores (
+        id SERIAL PRIMARY KEY,
+        tenant_id UUID NOT NULL,
+        id_firebird INTEGER NOT NULL,
+        nome VARCHAR(255) NOT NULL,
+        email VARCHAR(255),
+        ativo BOOLEAN DEFAULT TRUE,
+        sincronizado_em TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(tenant_id, id_firebird)
+      );
+
+      CREATE TABLE IF NOT EXISTS dash_vendas (
+        id SERIAL PRIMARY KEY,
+        tenant_id UUID NOT NULL,
+        id_firebird INTEGER NOT NULL,
+        numero_pedido VARCHAR(100),
+        data_venda TIMESTAMPTZ NOT NULL,
+        data_vencimento TIMESTAMPTZ DEFAULT NULL,
+        data_hora_proc TIMESTAMPTZ DEFAULT NULL,
+        data_fat TIMESTAMPTZ DEFAULT NULL,
+        cliente_id_firebird INTEGER,
+        vendedor_id_firebird INTEGER,
+        valor_total DECIMAL(15,2) NOT NULL DEFAULT 0,
+        valor_custo DECIMAL(15,2) NOT NULL DEFAULT 0,
+        valor_desconto DECIMAL(15,2) DEFAULT 0,
+        status VARCHAR(100) DEFAULT 'FATURADO',
+        marca VARCHAR(255),
+        categoria VARCHAR(255),
+        especie VARCHAR(255),
+        depto_id INTEGER DEFAULT NULL,
+        cfop INTEGER DEFAULT NULL,
+        numero_nota VARCHAR(50) DEFAULT NULL,
+        es INTEGER DEFAULT NULL,
+        processo INTEGER DEFAULT NULL,
+        chave_nfe VARCHAR(50) DEFAULT NULL,
+        peso_bruto DECIMAL(15,3) DEFAULT 0,
+        peso_liquido DECIMAL(15,3) DEFAULT 0,
+        destinatario_nome VARCHAR(255) DEFAULT NULL,
+        destinatario_doc VARCHAR(100) DEFAULT NULL,
+        destinatario_cidade VARCHAR(255) DEFAULT NULL,
+        destinatario_uf VARCHAR(2) DEFAULT NULL,
+        cidade_ibge VARCHAR(20) DEFAULT NULL,
+        sincronizado_em TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(tenant_id, id_firebird)
+      );
+
+      CREATE TABLE IF NOT EXISTS dash_vendas_itens (
+        id SERIAL PRIMARY KEY,
+        tenant_id UUID NOT NULL,
+        id_firebird INTEGER NOT NULL,
+        venda_id_firebird INTEGER NOT NULL,
+        produto_id_firebird INTEGER,
+        quantidade DECIMAL(15,3) NOT NULL DEFAULT 1,
+        preco_unitario DECIMAL(15,2) NOT NULL DEFAULT 0,
+        custo_unitario DECIMAL(15,2) NOT NULL DEFAULT 0,
+        valor_total DECIMAL(15,2) NOT NULL DEFAULT 0,
+        vendedor VARCHAR(255),
+        produto VARCHAR(500),
+        marca VARCHAR(255),
+        categoria VARCHAR(255),
+        depto_id INTEGER DEFAULT NULL,
+        sincronizado_em TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(tenant_id, id_firebird)
+      );
+
+      CREATE TABLE IF NOT EXISTS dash_financeiro (
+        id SERIAL PRIMARY KEY,
+        tenant_id UUID NOT NULL,
+        id_firebird INTEGER NOT NULL,
+        tipo VARCHAR(100) NOT NULL,
+        tipo_documento VARCHAR(100) DEFAULT NULL,
+        descricao TEXT,
+        cliente_id_firebird INTEGER,
+        fornecedor_id_firebird INTEGER,
+        data_emissao TIMESTAMPTZ,
+        data_vencimento TIMESTAMPTZ NOT NULL,
+        data_pagamento TIMESTAMPTZ,
+        valor DECIMAL(15,2) NOT NULL DEFAULT 0,
+        valor_pago DECIMAL(15,2) DEFAULT 0,
+        status_pagamento VARCHAR(50) DEFAULT 'ABERTO',
+        depto_id INTEGER,
+        centro_custo VARCHAR(255),
+        caixa_id_firebird INTEGER,
+        sincronizado_em TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(tenant_id, id_firebird)
+      );
+
+      CREATE TABLE IF NOT EXISTS dash_comissoes (
+        id SERIAL PRIMARY KEY,
+        tenant_id UUID NOT NULL,
+        id_firebird INTEGER NOT NULL,
+        vendedor_id_firebird INTEGER NOT NULL,
+        venda_id_firebird INTEGER,
+        periodo VARCHAR(50),
+        valor_vendas DECIMAL(15,2) DEFAULT 0,
+        percentual DECIMAL(5,2) DEFAULT 0,
+        valor_comissao DECIMAL(15,2) DEFAULT 0,
+        data_referencia TIMESTAMPTZ,
+        sincronizado_em TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(tenant_id, id_firebird)
+      );
+
+      CREATE TABLE IF NOT EXISTS dash_caixas (
+        id SERIAL PRIMARY KEY,
+        tenant_id UUID NOT NULL,
+        id_firebird INTEGER NOT NULL,
+        descricao VARCHAR(150),
+        sincronizado_em TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(tenant_id, id_firebird)
+      );
+
+      CREATE TABLE IF NOT EXISTS dash_filiais (
+        id SERIAL PRIMARY KEY,
+        tenant_id UUID NOT NULL,
+        empresa_erp INTEGER DEFAULT 1,
+        depto_id INTEGER NOT NULL,
+        centro_custo INTEGER,
+        nome VARCHAR(255) NOT NULL,
+        documento VARCHAR(100),
+        is_default BOOLEAN DEFAULT FALSE,
+        ativo BOOLEAN DEFAULT TRUE,
+        sincronizado_em TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(tenant_id, depto_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS dash_marcas (
+        id SERIAL PRIMARY KEY,
+        tenant_id UUID NOT NULL,
+        id_firebird INTEGER NOT NULL,
+        nome VARCHAR(255) NOT NULL,
+        sincronizado_em TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(tenant_id, id_firebird)
+      );
+
+      CREATE TABLE IF NOT EXISTS dash_grupos (
+        id SERIAL PRIMARY KEY,
+        tenant_id UUID NOT NULL,
+        id_firebird INTEGER NOT NULL,
+        nome VARCHAR(255) NOT NULL,
+        sincronizado_em TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(tenant_id, id_firebird)
+      );
+
+      CREATE TABLE IF NOT EXISTS dash_fornecedores (
+        id SERIAL PRIMARY KEY,
+        tenant_id UUID NOT NULL,
+        id_firebird INTEGER NOT NULL,
+        nome VARCHAR(255) NOT NULL,
+        documento VARCHAR(100),
+        cidade VARCHAR(255),
+        estado VARCHAR(2),
+        sincronizado_em TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(tenant_id, id_firebird)
+      );
+
+      CREATE TABLE IF NOT EXISTS dash_devolucoes (
+        id SERIAL PRIMARY KEY,
+        tenant_id UUID NOT NULL,
+        id_firebird INTEGER NOT NULL,
+        venda_id_firebird INTEGER,
+        produto_id_firebird INTEGER,
+        data_devolucao TIMESTAMPTZ NOT NULL,
+        motivo TEXT,
+        quantidade DECIMAL(15,3) DEFAULT 1,
+        valor DECIMAL(15,2) NOT NULL DEFAULT 0,
+        sincronizado_em TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(tenant_id, id_firebird)
+      );
+
+      CREATE TABLE IF NOT EXISTS dash_compras (
+        id SERIAL PRIMARY KEY,
+        tenant_id UUID NOT NULL,
+        id_firebird INTEGER NOT NULL,
+        numero_pedido VARCHAR(100),
+        fornecedor_id_firebird INTEGER NOT NULL,
+        data_pedido TIMESTAMPTZ NOT NULL,
+        data_entrega TIMESTAMPTZ,
+        valor_total DECIMAL(15,2) NOT NULL DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'FINALIZADO',
+        sincronizado_em TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(tenant_id, id_firebird)
+      );
     `);
     console.log('[PostgreSQL Central] Schema Omni-Sync e Concentrador Fiscal verificados com sucesso.');
 
