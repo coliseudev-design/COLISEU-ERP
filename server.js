@@ -2625,13 +2625,14 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
+process.on('uncaughtException', (err) => {
+  console.error('[Coliseu ERP Server] Uncaught Exception:', err.message);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Coliseu ERP Server] Unhandled Rejection:', reason);
+});
+
 app.listen(port, '0.0.0.0', () => {
   console.log(`[Coliseu ERP Server] Omni-Sync Central ativo na porta ${port} conectado ao Postgres.`);
 });
-if (port !== 3000) {
-  try {
-    app.listen(3000, '0.0.0.0', () => {
-      console.log(`[Coliseu ERP Server] Escutando também na porta 3000 para proxies.`);
-    });
-  } catch {}
-}

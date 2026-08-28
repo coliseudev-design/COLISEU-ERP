@@ -75,6 +75,17 @@ router.post('/heartbeat', async (req, res) => {
 
     try {
         await db.query(`
+            CREATE TABLE IF NOT EXISTS dash_sync_metadata (
+                id SERIAL PRIMARY KEY,
+                tenant_id UUID NOT NULL,
+                tabela VARCHAR(100) NOT NULL,
+                ultima_sincronizacao TIMESTAMPTZ,
+                registros_sincronizados INTEGER DEFAULT 0,
+                status VARCHAR(50) DEFAULT 'OK',
+                erro_mensagem TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(tenant_id, tabela)
+            );
             INSERT INTO dash_sync_metadata (tenant_id, tabela, ultima_sincronizacao, registros_sincronizados, status, erro_mensagem)
             VALUES ($1, $2, NOW(), 0, $3, NULL)
             ON CONFLICT (tenant_id, tabela) DO UPDATE SET 
@@ -374,6 +385,19 @@ router.post('/:tabela', async (req, res) => {
 router.get('/status', async (req, res) => {
     const { id: tenantId } = req.tenant;
     try {
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS dash_sync_metadata (
+                id SERIAL PRIMARY KEY,
+                tenant_id UUID NOT NULL,
+                tabela VARCHAR(100) NOT NULL,
+                ultima_sincronizacao TIMESTAMPTZ,
+                registros_sincronizados INTEGER DEFAULT 0,
+                status VARCHAR(50) DEFAULT 'OK',
+                erro_mensagem TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(tenant_id, tabela)
+            );
+        `);
         const { rows } = await db.query(`
             SELECT tabela, ultima_sincronizacao as ultima, status, registros_sincronizados as registros
             FROM dash_sync_metadata
