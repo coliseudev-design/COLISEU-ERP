@@ -8,33 +8,87 @@ const logger = require('../config/logger');
 // AsyncLocalStorage to maintain the active database context for requests/syncs
 const dbContext = new AsyncLocalStorage();
 
-// PostgreSQL Pool for Dashboard (Coliseu)
-const poolConfig = config.postgres.connectionString
-    ? {
-        connectionString: config.postgres.connectionString,
-        ssl: config.postgres.ssl ? { rejectUnauthorized: false } : false,
-        max: 50,
-        idleTimeoutMillis: 10000,
-        connectionTimeoutMillis: 10000,
+const dns = require('dns').promises;
+
+let currentPool = null;
+let activeHost = null;
+
+function createPoolForHost(host, pass) {
+    const poolConfig = config.postgres.connectionString
+        ? {
+            connectionString: config.postgres.connectionString,
+            ssl: config.postgres.ssl ? { rejectUnauthorized: false } : false,
+            max: 50,
+            idleTimeoutMillis: 10000,
+            connectionTimeoutMillis: 10000,
+        }
+        : {
+            host: host || config.postgres.host || 'postgres',
+            port: config.postgres.port || 5432,
+            database: config.postgres.database || 'coliseu_erp',
+            user: config.postgres.user || 'postgres',
+            password: pass !== undefined ? pass : (config.postgres.password || 'postgres123'),
+            ssl: config.postgres.ssl ? { rejectUnauthorized: false } : false,
+            max: 50,
+            idleTimeoutMillis: 10000,
+            connectionTimeoutMillis: 10000,
+        };
+
+    const p = new Pool(poolConfig);
+    p.on('error', (err) => {
+        logger.warn('[DB] Aviso em cliente ocioso do PostgreSQL:', err.message);
+    });
+    return p;
+}
+
+currentPool = createPoolForHost(config.postgres.host);
+
+async function getWorkingPool() {
+    if (activeHost && currentPool) {
+        return currentPool;
     }
-    : {
-        host: config.postgres.host,
-        port: config.postgres.port,
-        database: config.postgres.database,
-        user: config.postgres.user,
-        password: config.postgres.password,
-        ssl: config.postgres.ssl ? { rejectUnauthorized: false } : false,
-        max: 50,
-        idleTimeoutMillis: 10000,
-        connectionTimeoutMillis: 10000,
-    };
 
-const pool = new Pool(poolConfig);
+    const candidateHosts = [
+        config.postgres.host,
+        process.env.DB_HOST,
+        process.env.DATABASE_HOST,
+        process.env.POSTGRES_HOST,
+        'postgres',
+        'postgresql',
+        'db',
+        'coliseu-postgres',
+        'localhost',
+        '127.0.0.1'
+    ].filter(Boolean);
 
-pool.on('error', (err) => {
-    logger.error('[DB] Erro inesperado em cliente ocioso do PostgreSQL', err);
-});
+    const candidatePasswords = [
+        config.postgres.password,
+        process.env.DB_PASSWORD,
+        process.env.POSTGRES_PASSWORD,
+        'postgres123',
+        'coliseu_admin',
+        'postgres',
+        ''
+    ].filter(p => p !== undefined);
 
+    for (const h of candidateHosts) {
+        try {
+            await dns.lookup(h);
+            for (const pass of candidatePasswords) {
+                try {
+                    const testPool = createPoolForHost(h, pass);
+                    await testPool.query('SELECT 1');
+                    activeHost = h;
+                    currentPool = testPool;
+                    logger.info(`[DB] Conexão ativa estabelecida com sucesso no host: ${h}`);
+                    return currentPool;
+                } catch {}
+            }
+        } catch {}
+    }
+
+    return currentPool || createPoolForHost('postgres');
+}
 
 /**
  * Executa uma query no PostgreSQL.
@@ -43,11 +97,21 @@ pool.on('error', (err) => {
  * @returns {Promise<import('pg').QueryResult<any>>}
  */
 async function query(text, params) {
-    const start = Date.now();
     try {
-        const res = await pool.query(text, params);
+        const poolToUse = await getWorkingPool();
+        const res = await poolToUse.query(text, params);
         return res;
     } catch (err) {
+        if (err.message && (err.message.includes('getaddrinfo') || err.message.includes('ECONNREFUSED'))) {
+            activeHost = null; // force rediscovery
+            try {
+                const retryPool = await getWorkingPool();
+                return await retryPool.query(text, params);
+            } catch (retryErr) {
+                logger.error('[DB] Falha crítica após tentativa de reconexão', { error: retryErr.message });
+                throw retryErr;
+            }
+        }
         logger.error('[DB] Falha ao executar query', { text: text.substring(0, 150), error: err.message });
         throw err;
     }
@@ -162,7 +226,7 @@ async function checkConnection() {
 module.exports = {
     query,
     get pool() {
-        return pool;
+        return currentPool;
     },
     poolMain: pool,
     checkConnection,
