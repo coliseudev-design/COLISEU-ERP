@@ -2628,3 +2628,10 @@ app.get('*', (req, res) => {
 app.listen(port, '0.0.0.0', () => {
   console.log(`[Coliseu ERP Server] Omni-Sync Central ativo na porta ${port} conectado ao Postgres.`);
 });
+if (port !== 3000) {
+  try {
+    app.listen(3000, '0.0.0.0', () => {
+      console.log(`[Coliseu ERP Server] Escutando também na porta 3000 para proxies.`);
+    });
+  } catch {}
+}
