@@ -243,6 +243,38 @@ async function initDb() {
       CREATE INDEX IF NOT EXISTS idx_doc_fiscais_periodo ON documentos_fiscais(empresa_id, modelo, data_emissao);
     `);
     console.log('[PostgreSQL Central] Schema Omni-Sync e Concentrador Fiscal verificados com sucesso.');
+
+    // Executa schema.sql e views.sql para criação das tabelas dash_*
+    try {
+      const schemaPath = path.join(__dirname, 'src-server', 'db', 'schema.sql');
+      if (fs.existsSync(schemaPath)) {
+        const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+        await pool.query(schemaSql);
+        console.log('[PostgreSQL Central] dash_* Schema (src-server/db/schema.sql) aplicado com sucesso.');
+      }
+      const viewsPath = path.join(__dirname, 'src-server', 'db', 'views.sql');
+      if (fs.existsSync(viewsPath)) {
+        const viewsSql = fs.readFileSync(viewsPath, 'utf8');
+        await pool.query(viewsSql);
+        console.log('[PostgreSQL Central] dash_* Views (src-server/db/views.sql) aplicadas com sucesso.');
+      }
+      // Executa migrações incrementais de colunas
+      const migrationsDir = path.join(__dirname, 'src-server', 'db', 'migrations');
+      if (fs.existsSync(migrationsDir)) {
+        const migrationFiles = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
+        for (const file of migrationFiles) {
+          try {
+            const migSql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+            await pool.query(migSql);
+          } catch (mErr) {
+            // Ignora se coluna já existir
+          }
+        }
+        console.log('[PostgreSQL Central] Migrações incrementais aplicadas com sucesso.');
+      }
+    } catch (schemaErr) {
+      console.warn('[PostgreSQL Central] Aviso ao aplicar schema.sql:', schemaErr.message);
+    }
   } catch (err) {
     console.warn('[PostgreSQL Central] Aviso na inicialização de tabelas:', err.message);
   }
